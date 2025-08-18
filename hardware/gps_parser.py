@@ -9,15 +9,21 @@ class GPSData:
         self.latitude = 0.0
         self.longitude = 0.0
         self.speed_knots = 0.0
+        self.speed_kph = 0.0
         self.time = ""
+        self.hour = 0
+        self.minute = 0
+        self.second = 0
         self.date = ""
+        self.day = 0
+        self.month = 0
+        self.year = 0
         self.satellites = 0
         self.altitude = 0.0
-        self.hdop = 0.0  # Horizontal Dilution of Precision
-        self.pdop = 0.0  # Position Dilution of Precision
-        self.vdop = 0.0  # Vertical Dilution of Precision
+        self.hdop = 0.0                 # Horizontal Dilution of Precision
+        self.pdop = 0.0                 # Position Dilution of Precision
+        self.vdop = 0.0                 # Vertical Dilution of Precision
 
-# This would replace the existing GPSReader class in your parser.py file
 
 class GPSReader:
     """Class to handle GPS reading with non-blocking updates when getting data"""
@@ -114,10 +120,24 @@ class GPSReader:
         return self.current_data.satellites
     
     @property
-    def speed(self):
+    def speed_knots(self):
         """Get the current speed in knots"""
         self.update()
         return self.current_data.speed_knots
+    
+    @property
+    def speed_kph(self):
+        """Get the current speed in km/h"""
+        self.update()
+        speed_kph = self.current_data.speed_knots * 1.852
+        return speed_kph
+    
+    @property
+    def speed_mph(self):
+        """Get the current speed in mph"""
+        self.update()
+        speed_mph = self.current_data.speed_knots * 1.15078
+        return speed_mph
     
     @property
     def time(self):
@@ -126,10 +146,22 @@ class GPSReader:
         return self.current_data.time
     
     @property
+    def time_split(self):
+        """Get the current GPS time - split"""
+        self.update()
+        return self.current_data.hour, self.current_data.minute, self.current_data.second
+    
+    @property
     def date(self):
         """Get the current GPS date"""
         self.update()
         return self.current_data.date
+    
+    @property
+    def date_split(self):
+        """Get the current GPS date - split"""
+        self.update()
+        return self.current_data.day, self.current_data.month, self.current_data.year
 
 # For backward compatibility
 def parse_gps_data(nmea_chunk):
@@ -159,6 +191,8 @@ def _process_nmea_data(nmea_data):
             _parse_gga(sentence, gps_data)
         elif sentence.startswith('$GPGSA'):
             _parse_gsa(sentence, gps_data)
+        #elif sentence.startswith('$GPGSV'):     # TO DO
+        #    _parse_gsa(sentence, gps_data)
     
     return gps_data
 
@@ -185,6 +219,9 @@ def _parse_rmc(sentence, gps_data):
             minute = parts[1][2:4]
             second = parts[1][4:]
             gps_data.time = f"{hour}:{minute}:{second}"
+            gps_data.hour = int(hour)
+            gps_data.minute = int(minute)
+            gps_data.second = int(float(second))
         except (ValueError, IndexError):
             # Keep the existing time value if parsing fails
             pass
@@ -196,6 +233,9 @@ def _parse_rmc(sentence, gps_data):
             month = parts[9][2:4]
             year = "20" + parts[9][4:6]  # Assuming we're in the 2000s
             gps_data.date = f"{day}/{month}/{year}"
+            gps_data.day = int(day)
+            gps_data.month = int(month)
+            gps_data.year = int(year)
         except (ValueError, IndexError):
             # Keep the existing date value if parsing fails
             pass
