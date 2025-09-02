@@ -1,6 +1,9 @@
 ### GPS Weather Clock Project
 (Australia Only)
 
+# Pico 2W Pinout
+![Raspberry Pi Pico 2W](https://www.raspberrypi.com/documentation/microcontrollers/images/pico2w-pinout.svg)
+
 ## Pins
 | Component | Interface | I/O | Pin |
 | --- | --- | --- | --- |
@@ -14,5 +17,3 @@
 | **OLED (C)** | `I2C` | Mux SDA<br>Mux SCL | SDA2<br>SCL2 |
 | **OLED (D)** | `I2C` | Mux SDA<br>Mux SCL | SDA3<br>SCL3 |
 
-# Pico 2W Pinout
-![Raspberry Pi Pico 2W](https://www.raspberrypi.com/documentation/microcontrollers/images/pico2w-pinout.svg)
