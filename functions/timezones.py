@@ -205,17 +205,18 @@ def aus_localtime_from_gps(lat, lon, utc_dt):
     offset_minutes = base_offset + ((30 if lh_half_hour_dst else 60) if is_dst else 0)
 
     local_dt = add_minutes(utc_dt, offset_minutes)
+    lY, lM, lD, lhh, lmm, lss = local_dt
 
     return {
         'zone_id': zone_id,
         'utc_offset_minutes': offset_minutes,
         'is_dst': is_dst,
-        'year': Y,
-        'month': M,
-        'day': D,
-        'hour': hh,
-        'minute': mm,
-        'second': ss
+        'year': lY,
+        'month': lM,
+        'day': lD,
+        'hour': lhh,
+        'minute': lmm,
+        'second': lss
     }
 
 

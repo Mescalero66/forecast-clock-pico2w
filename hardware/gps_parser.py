@@ -239,7 +239,7 @@ def _parse_rmc(sentence, gps_data):
         except (ValueError, IndexError):
             # Keep the existing date value if parsing fails
             pass
-    
+
     # Only extract position and speed if we have a valid fix
     if gps_data.has_fix:
         # Extract latitude and longitude with sign based on direction
