@@ -1,26 +1,48 @@
 import time
 from machine import I2C, Pin, UART, RTC
-from hardware.HT16K33LED import HT16K33LED
-from hardware.gps_parser import GPSReader
-from hardware.TM1650 import LED4digdisp
+from hardware.LED8_HT16K33 import HT16K33LED
+from hardware.GPS_PARSER import GPSReader
+from hardware.LED4_TM1650 import LED4digdisp
+from hardware.MUX_TCA9548A import I2CMultiplex
+from hardware.OLED_SSD1306 import SSD1306_I2C
 import functions.timezones as AuTz
 
-# Set up UART connection to GPS module
-uart = UART(0, baudrate=9600, tx=Pin(0), rx=Pin(1))
+PIN_UART_TX = 0
+PIN_UART_RX = 1
+PIN_MUX_SDA = 14
+PIN_MUX_SCL = 15
+PIN_LED8_SDA = 4
+PIN_LED8_SCL = 5
+PIN_LED4H_SDA = 20
+PIN_LED4H_SCL = 21
+PIN_LED4L_SDA = 18
+PIN_LED4L_SCL = 19
+ADDR_MUX = 0x70
+OLED_RES_X = 128
+OLED_RES_Y = 64
+OLED_ID_TL = 2
+OLED_ID_TR = 3
+OLED_ID_BL = 0
+OLED_ID_BR = 1
 
-# Create a GPS reader object
-GPS_obj = GPSReader(uart)
+uart = UART(0, baudrate=9600, tx=Pin(PIN_UART_TX), rx=Pin(PIN_UART_RX))                     # Set up UART connection to GPS module
+i2c = I2C(0, scl=Pin(PIN_LED8_SCL), sda=Pin(PIN_LED8_SDA))                                  # Set up I2C connection
+ 
+mux = I2CMultiplex(ADDR_MUX, I2Cbus=1, scl_pin=PIN_MUX_SCL, sda_pin=PIN_MUX_SDA)            # Set up I2C multiplexer
 
-# Create 8digit LED object
-i2c = I2C(0, scl=Pin(5), sda=Pin(4))
-disp8 = HT16K33LED(i2c)
+GPS_obj = GPSReader(uart)                                                                   # Create a GPS reader object   
+disp8 = HT16K33LED(i2c)                                                                     # Create 8digit LED object
+disp4H = LED4digdisp(1, PIN_LED4H_SCL, PIN_LED4H_SDA)                                       # Create 4digit LED object (HIGH)         
+disp4L = LED4digdisp(2, PIN_LED4L_SCL, PIN_LED4L_SDA)                                       # Create 4digit LED object (LOW)
+
 disp8.set_brightness(15)
+disp4H.display_on(0)
+disp4L.display_on(0)
 
-disp4u = LED4digdisp(1, 21, 20)
-disp4l = LED4digdisp(2, 19, 18)
-
-disp4u.display_on(0)
-disp4l.display_on(0)
+oledTL = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
+oledTR = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
+oledBL = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
+oledBR = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
 
 while True:
     gps_data = GPS_obj.get_data()
@@ -42,7 +64,7 @@ while True:
         epoch = time.mktime((yy, mm, dd, hr, mn, sc, 0, 0))
         weekday = time.localtime(epoch)[6]
 
-        rtc = machine.RTC()
+        rtc = RTC()
         rtc.datetime((yy, mm, dd, weekday, hr, mn, sc, 0))
         
         rtc_year, rtc_month, rtc_day, rtc_wd, rtc_hour, rtc_minute, rtc_second, rtc_us = rtc.datetime()
@@ -57,8 +79,15 @@ while True:
 
     m_str = f"{d:02}.{m:02}"
     y_str = f"{y:04}"
-    disp4u.show_string(m_str)
-    disp4l.show_string(y_str)
+    disp4H.show_string(m_str)
+    disp4L.show_string(y_str)
+    
+    oledTL.fill(0)
+    oledTL.date_text(ss)
+
+    mux.select_port(OLED_ID_TL)
+    oledTL.show()
+
     time_str = f"{hh:02} .{mm:02} .{ss:02}"
     disp8.set_string(time_str, "r")
     time.sleep(0.5)
