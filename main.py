@@ -39,13 +39,19 @@ disp8.set_brightness(15)
 disp4H.display_on(0)
 disp4L.display_on(0)
 
+mux.select_port(OLED_ID_TL)
 oledTL = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
+mux.select_port(OLED_ID_TR)
 oledTR = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
+mux.select_port(OLED_ID_BL)
 oledBL = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
+mux.select_port(OLED_ID_BR)
 oledBR = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
 
 while True:
     gps_data = GPS_obj.get_data()
+    sat_string = (f"GPSSAT {gps_data.satellites}")
+    disp8.set_string(sat_string, "l")
     if gps_data.has_fix == True:
         
         print(f"GPS: {gps_data.year}{gps_data.month}{gps_data.day} {gps_data.hour}.{gps_data.minute}.{gps_data.second}")
@@ -72,7 +78,6 @@ while True:
         time.sleep(1)
         break
     time.sleep(2)
-
 while True:
 
     y, m, d, wd, hh, mm, ss, us = rtc.datetime()
@@ -83,10 +88,22 @@ while True:
     disp4L.show_string(y_str)
     
     oledTL.fill(0)
-    oledTL.date_text(ss)
+    oledTL.banner_text_inverted(ss * y)
+    oledTR.fill(0)
+    oledTR.banner_text(ss * m)
+    oledBL.fill(0)
+    oledBL.date_text(ss * d)
+    oledBR.fill(0)
+    oledBR.text_inverted(ss * hh, x=25,y=48)
 
     mux.select_port(OLED_ID_TL)
     oledTL.show()
+    mux.select_port(OLED_ID_TR)
+    oledTR.show()
+    mux.select_port(OLED_ID_BL)
+    oledBL.show()
+    mux.select_port(OLED_ID_BR)
+    oledBR.show()
 
     time_str = f"{hh:02} .{mm:02} .{ss:02}"
     disp8.set_string(time_str, "r")
