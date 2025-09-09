@@ -1,10 +1,12 @@
 import time
+import asyncio
 from machine import I2C, Pin, UART, RTC
 from hardware.LED8_HT16K33 import HT16K33LED
 from hardware.GPS_PARSER import GPSReader
 from hardware.LED4_TM1650 import LED4digdisp
 from hardware.MUX_TCA9548A import I2CMultiplex
 from hardware.OLED_SSD1306 import SSD1306_I2C
+from hardware.WLAN import WLAN
 import functions.timezones as AuTz
 
 PIN_UART_TX = 0
@@ -24,6 +26,11 @@ OLED_ID_TL = 2
 OLED_ID_TR = 3
 OLED_ID_BL = 0
 OLED_ID_BR = 1
+
+wlan = WLAN()                                                                               # create WLAN object
+networks = wlan.scanWiFi()                                                                  # scan for the WLAN
+wlan.connectWiFi()                                                                          # connect to the WLAN
+print("WiFi Connected:", wlan.checkWiFi())                                                  # and double check
 
 uart = UART(0, baudrate=9600, tx=Pin(PIN_UART_TX), rx=Pin(PIN_UART_RX))                     # Set up UART connection to GPS module
 i2c = I2C(0, scl=Pin(PIN_LED8_SCL), sda=Pin(PIN_LED8_SDA))                                  # Set up I2C connection
@@ -87,23 +94,23 @@ while True:
     disp4H.show_string(m_str)
     disp4L.show_string(y_str)
     
-    oledTL.fill(0)
-    oledTL.banner_text_inverted(ss * y)
-    oledTR.fill(0)
-    oledTR.banner_text(ss * m)
-    oledBL.fill(0)
-    oledBL.date_text(ss * d)
-    oledBR.fill(0)
-    oledBR.text_inverted(ss * hh, x=25,y=48)
+    # oledTL.fill(0)
+    # oledTL.banner_text_inverted(ss * y)
+    # oledTR.fill(0)
+    # oledTR.banner_text(ss * m)
+    # oledBL.fill(0)
+    # oledBL.date_text(ss * d)
+    # oledBR.fill(0)
+    # oledBR.text_inverted(ss * hh, x=25,y=48)
 
-    mux.select_port(OLED_ID_TL)
-    oledTL.show()
-    mux.select_port(OLED_ID_TR)
-    oledTR.show()
-    mux.select_port(OLED_ID_BL)
-    oledBL.show()
-    mux.select_port(OLED_ID_BR)
-    oledBR.show()
+    # mux.select_port(OLED_ID_TL)
+    # oledTL.show()
+    # mux.select_port(OLED_ID_TR)
+    # oledTR.show()
+    # mux.select_port(OLED_ID_BL)
+    # oledBL.show()
+    # mux.select_port(OLED_ID_BR)
+    # oledBR.show()
 
     time_str = f"{hh:02} .{mm:02} .{ss:02}"
     disp8.set_string(time_str, "r")

@@ -24,7 +24,6 @@ class GPSData:
         self.pdop = 0.0                 # Position Dilution of Precision
         self.vdop = 0.0                 # Vertical Dilution of Precision
 
-
 class GPSReader:
     """Class to handle GPS reading with non-blocking updates when getting data"""
     def __init__(self, uart):

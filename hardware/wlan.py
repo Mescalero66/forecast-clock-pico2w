@@ -1,6 +1,6 @@
 import network
 import time
-import wlan_key
+import hardware.WLAN_KEY as wlan_key
 
 ssid = wlan_key.ssid
 password = wlan_key.password
@@ -8,45 +8,88 @@ password = wlan_key.password
 class WLAN:
     def __init__(self):
         self.wlan_obj = network.WLAN(network.WLAN.IF_STA)
-    
-    def connectWiFi(self):
-        self.wlan_obj.active(True)
-        self.wlan_obj.connect(ssid, password)
-        # input patience level
-        max_wait = 10
-        # Wait for connection or fail
-        while max_wait > 0:
-            if self.wlan_obj.status() < 0 or self.wlan_obj.status() >= 3:
-                break
-            max_wait -= 1
-            print('waiting for connection...')
-            time.sleep(1)
-        # Handle connection error
-        if self.wlan_obj.status() != 3:
-            raise RuntimeError('network connection failed')
-        else:
-            print('connected')
-            status = self.wlan_obj.ifconfig()
-            print( 'ip = ' + status[0] )
+
+    def connectWiFi(self, retries=3, wait_per_try=10):
+        """
+        Connect to WiFi with retries and clear status reporting.
+        """
+        if not self.wlan_obj.active():
+            self.wlan_obj.active(True)
+
+        for attempt in range(1, retries + 1):
+            print(f"Connect attempt {attempt} to SSID: {repr(ssid)}")
+            self.wlan_obj.connect(ssid, password)
+
+            wait = wait_per_try
+            while wait > 0:
+                status = self.wlan_obj.status()
+                if status < 0 or status >= 3:
+                    break
+                wait -= 1
+                print("waiting for connection...")
+                time.sleep(1)
+
+            status = self.wlan_obj.status()
+            if status == 3:
+                print("Connected!")
+                ip = self.wlan_obj.ifconfig()[0]
+                print(f"IP address: {ip}")
+                return True
+            elif status == -1:
+                print("Connection failed: generic error")
+            elif status == -2:
+                print("Connection failed: AP not found")
+            elif status == -3:
+                print("Connection failed: connection failed")
+            elif status == -4:
+                print("Connection failed: wrong password")
+            else:
+                print(f"Connection failed: unknown status {status}")
+
+            print("Retrying...\n")
+            time.sleep(2)  # short delay before next attempt
+
+        # All retries failed
+        raise RuntimeError("WiFi connection failed after multiple attempts.")
 
     def disconnectWiFi(self):
-        self.wlan_obj.disconnect()
+        if self.wlan_obj.isconnected():
+            self.wlan_obj.disconnect()
         self.wlan_obj.active(False)
 
     def scanWiFi(self):
-        results = self.wlan_obj.scan()
-        return results
-    
+        if not self.wlan_obj.active():
+            self.wlan_obj.active(True)
+        if self.wlan_obj.isconnected():
+            self.wlan_obj.disconnect()
+            time.sleep(1)
+        try:
+            results = self.wlan_obj.scan()
+            formatted = []
+            for ssid_bytes, bssid, channel, rssi, authmode, hidden in results:
+                formatted.append({
+                    "ssid": ssid_bytes.decode(),
+                    "rssi": rssi,
+                    "channel": channel,
+                    "authmode": authmode,
+                    "hidden": hidden
+                })
+            return formatted
+        except OSError as e:
+            print("Scan failed:", e)
+            return []
+
     def checkWiFi(self):
-        isconnected = self.wlan_obj.isconnected()
-        return isconnected
+        return self.wlan_obj.isconnected()
 
-wlan = WLAN()
+######## Example usage
+# wlan = WLAN()
 
-print("WiFi Networks:")
-print(wlan.scanWiFi())
+# print("Scanning WiFi networks...")
+# networks = wlan.scanWiFi()
+# for net in networks:
+#     print(f"SSID: {net['ssid']}  RSSI: {net['rssi']} dBm  Channel: {net['channel']}")
 
-wlan.connectWiFi()
+# wlan.connectWiFi()
 
-print("WiFi Connected:", wlan.checkWiFi())
-
+# print("WiFi Connected:", wlan.checkWiFi())
