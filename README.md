@@ -17,3 +17,12 @@
 | **OLED (C)** | `I2C` | Mux SDA<br>Mux SCL | SDA2<br>SCL2 |
 | **OLED (D)** | `I2C` | Mux SDA<br>Mux SCL | SDA3<br>SCL3 |
 
+
+ - https://github.com/trickypr/bom-weather-docs/tree/main
+ - https://github.com/peterhinch/micropython-async/blob/master/v3/docs/TUTORIAL.md
+
+ - https://api.weather.bom.gov.au/v1/locations/r1r0mgn/
+
+ - https://docs.micropython.org/en/latest/library/json.html
+ 
+

@@ -7,7 +7,9 @@ from hardware.LED4_TM1650 import LED4digdisp
 from hardware.MUX_TCA9548A import I2CMultiplex
 from hardware.OLED_SSD1306 import SSD1306_I2C
 from hardware.WLAN import WLAN
-import functions.timezones as AuTz
+import functions.timezones as Austimezone
+import functions.geohash as Geohash
+import functions.location as LocationName
 
 PIN_UART_TX = 0
 PIN_UART_RX = 1
@@ -55,22 +57,82 @@ oledBL = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
 mux.select_port(OLED_ID_BR)
 oledBR = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
 
+async def process_GPS():
+    # do something
+    test = 0
+
+async def get_time():
+    # do something
+    test = 0
+
+async def apply_timezone():
+    # do something
+    test = 0
+
+async def sync_time():
+    # do something
+    test = 0
+
+async def get_coordinates():
+    # do something
+    test = 0
+
+async def get_geohash():
+    # do something
+    test = 0
+
+async def get_location():
+    # do something
+    test = 0
+
+async def get_forecast():
+    # do something
+    test = 0
+
+async def display_time():
+    # do something
+    test = 0
+
+async def display_temperatures():
+    # do something
+    test = 0
+
+async def display_date_locations():
+    # do something
+    test = 0
+
+async def display_forecasts():
+    # do something
+    test = 0
+
+async def main():
+    # do something
+    test = 0
+
 while True:
     gps_data = GPS_obj.get_data()
     sat_string = (f"GPSSAT {gps_data.satellites}")
     disp8.set_string(sat_string, "l")
     if gps_data.has_fix == True:
         
+        gh_output = Geohash.encode(gps_data.latitude, gps_data.longitude, precision=7)
+        print(f"GeoHash: {gh_output}")
+        time.sleep(1)
+
+        LocName, LocState = LocationName.get_location(gh_output)
+        print(f"JSON: {LocName}, {LocState}")
+        time.sleep(1)
+
         print(f"GPS: {gps_data.year}{gps_data.month}{gps_data.day} {gps_data.hour}.{gps_data.minute}.{gps_data.second}")
         time.sleep(1)
 
-        timezonetime = AuTz.aus_localtime_from_gps(gps_data.latitude,gps_data.longitude,(gps_data.year, gps_data.month, gps_data.day, gps_data.hour, gps_data.minute, gps_data.second))
+        timezonetime = Austimezone.aus_localtime_from_gps(gps_data.latitude,gps_data.longitude,(gps_data.year, gps_data.month, gps_data.day, gps_data.hour, gps_data.minute, gps_data.second))
         print(f"GPS: {gps_data.latitude} {gps_data.longitude}")
         print(timezonetime)
         time.sleep(1)
 
         local_year, local_month, local_day, local_hour, local_minute, local_second = (timezonetime[k] for k in ['year','month','day','hour','minute','second'])
-        print(f"AuTZ: {local_year}{local_month}{local_day} {local_hour}.{local_minute}.{local_second}")
+        print(f"Austimezone: {local_year}{local_month}{local_day} {local_hour}.{local_minute}.{local_second}")
         time.sleep(1)
 
         yy, mm, dd, hr, mn, sc = (local_year, local_month, local_day, local_hour, local_minute, local_second)
