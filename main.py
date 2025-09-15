@@ -7,9 +7,9 @@ from hardware.LED4_TM1650 import LED4digdisp
 from hardware.MUX_TCA9548A import I2CMultiplex
 from hardware.OLED_SSD1306 import SSD1306_I2C
 from hardware.WLAN import WLAN
-import functions.timezones as Austimezone
+import functions.timezones as AusTimeZones
 import functions.geohash as Geohash
-import functions.location as LocationName
+import functions.forecast as BoMdata
 
 PIN_UART_TX = 0
 PIN_UART_RX = 1
@@ -29,10 +29,20 @@ OLED_ID_TR = 3
 OLED_ID_BL = 0
 OLED_ID_BR = 1
 
+TIMEZONE_OFFSET = 0
+
+def now_utc():
+    return time.time()
+
+def now_local():
+    return time.localtime(time.time() + TIMEZONE_OFFSET)
+
 wlan = WLAN()                                                                               # create WLAN object
 networks = wlan.scanWiFi()                                                                  # scan for the WLAN
 wlan.connectWiFi()                                                                          # connect to the WLAN
 print("WiFi Connected:", wlan.checkWiFi())                                                  # and double check
+
+pico_rtc = RTC()                                                                            # create Real Time Clock
 
 uart = UART(0, baudrate=9600, tx=Pin(PIN_UART_TX), rx=Pin(PIN_UART_RX))                     # Set up UART connection to GPS module
 i2c = I2C(0, scl=Pin(PIN_LED8_SCL), sda=Pin(PIN_LED8_SDA))                                  # Set up I2C connection
@@ -43,6 +53,9 @@ GPS_obj = GPSReader(uart)                                                       
 disp8 = HT16K33LED(i2c)                                                                     # Create 8digit LED object
 disp4H = LED4digdisp(1, PIN_LED4H_SCL, PIN_LED4H_SDA)                                       # Create 4digit LED object (HIGH)         
 disp4L = LED4digdisp(2, PIN_LED4L_SCL, PIN_LED4L_SDA)                                       # Create 4digit LED object (LOW)
+
+BoMInfo = BoMdata.BoMForecast()                                                             # Create the BoM data structure
+TimezoneInfo = AusTimeZones.LocalTimezone()                                                 # Create the Timezone data structure
 
 disp8.set_brightness(15)
 disp4H.display_on(0)
@@ -115,41 +128,45 @@ while True:
     disp8.set_string(sat_string, "l")
     if gps_data.has_fix == True:
         
+        print(f"GPS: {gps_data.year}{gps_data.month}{gps_data.day} {gps_data.hour}.{gps_data.minute}.{gps_data.second}")
+        time.sleep(1)
+
+        timezonetime = TimezoneInfo.update_localtime(gps_data.latitude,gps_data.longitude,(gps_data.year, gps_data.month, gps_data.day, gps_data.hour, gps_data.minute, gps_data.second))
+        print(f"GPS: {gps_data.latitude} {gps_data.longitude}")
+        # DO NOT DELETE
+        TIMEZONE_OFFSET = timezonetime.offset_minutes * 60
+        time.sleep(1)
+
+        # local_year, local_month, local_day, local_hour, local_minute, local_second = (timezonetime[k] for k in ['year','month','day','hour','minute','second'])
+        # print(f"Austimezone: {local_year}{local_month}{local_day} {local_hour}.{local_minute}.{local_second}")
+        # time.sleep(1)
+
+        # yy, mm, dd, hr, mn, sc = (local_year, local_month, local_day, local_hour, local_minute, local_second)
+        # epoch = time.mktime((yy, mm, dd, hr, mn, sc, 0, 0))
+        # weekday = time.localtime(epoch)[6]
+
+        epoch = time.mktime((gps_data.year, gps_data.month, gps_data.day, gps_data.hour, gps_data.minute, gps_data.second, 0, 0))
+        weekday = time.localtime(epoch)[6]
+
+        pico_rtc.datetime((gps_data.year, gps_data.month, gps_data.day, weekday, gps_data.hour, gps_data.minute, gps_data.second, 0))
+        
+        rtc_year, rtc_month, rtc_day, rtc_wd, rtc_hour, rtc_minute, rtc_second, rtc_us = pico_rtc.datetime()
+        print(f"RTC: {rtc_year}{rtc_month}{rtc_day} {rtc_hour}.{rtc_minute}.{rtc_second}")
+        time.sleep(1)
+
         gh_output = Geohash.encode(gps_data.latitude, gps_data.longitude, precision=7)
         print(f"GeoHash: {gh_output}")
         time.sleep(1)
 
-        LocName, LocState = LocationName.get_location(gh_output)
-        print(f"JSON: {LocName}, {LocState}")
+        jsonData = BoMInfo.update_location(gh_output)
+        print(f"JSON: {jsonData}")
         time.sleep(1)
 
-        print(f"GPS: {gps_data.year}{gps_data.month}{gps_data.day} {gps_data.hour}.{gps_data.minute}.{gps_data.second}")
-        time.sleep(1)
-
-        timezonetime = Austimezone.aus_localtime_from_gps(gps_data.latitude,gps_data.longitude,(gps_data.year, gps_data.month, gps_data.day, gps_data.hour, gps_data.minute, gps_data.second))
-        print(f"GPS: {gps_data.latitude} {gps_data.longitude}")
-        print(timezonetime)
-        time.sleep(1)
-
-        local_year, local_month, local_day, local_hour, local_minute, local_second = (timezonetime[k] for k in ['year','month','day','hour','minute','second'])
-        print(f"Austimezone: {local_year}{local_month}{local_day} {local_hour}.{local_minute}.{local_second}")
-        time.sleep(1)
-
-        yy, mm, dd, hr, mn, sc = (local_year, local_month, local_day, local_hour, local_minute, local_second)
-        epoch = time.mktime((yy, mm, dd, hr, mn, sc, 0, 0))
-        weekday = time.localtime(epoch)[6]
-
-        rtc = RTC()
-        rtc.datetime((yy, mm, dd, weekday, hr, mn, sc, 0))
-        
-        rtc_year, rtc_month, rtc_day, rtc_wd, rtc_hour, rtc_minute, rtc_second, rtc_us = rtc.datetime()
-        print(f"RTC: {rtc_year}{rtc_month}{rtc_day} {rtc_hour}.{rtc_minute}.{rtc_second}")
-        time.sleep(1)
         break
     time.sleep(2)
 while True:
 
-    y, m, d, wd, hh, mm, ss, us = rtc.datetime()
+    y, m, d, wd, hh, mm, ss, us = pico_rtc.datetime()
 
     m_str = f"{d:02}.{m:02}"
     y_str = f"{y:04}"
