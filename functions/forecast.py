@@ -43,7 +43,7 @@ class BoMLocation:
                 self.loc_current_data.loc_state = json_data["data"]["state"]
                 response.close()
                 self.loc_valid_data = True
-                return json_data
+                return
             else:
                 print(f"Error: HTTP Status Code when fetching Location JSON  {response.status_code}")
                 self.loc_valid_data = False

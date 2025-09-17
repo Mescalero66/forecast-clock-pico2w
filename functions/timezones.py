@@ -235,6 +235,10 @@ class LocalTimezone:
         self.tz_data.local_second = lss
 
         return self.tz_data
+    
+    @property
+    def tz_offset_minutes(self):
+        return self.tz_data.offset_minutes
 
 # ----------- Test Examples -----------
 """

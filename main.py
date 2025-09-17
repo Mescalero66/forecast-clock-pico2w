@@ -30,17 +30,14 @@ OLED_ID_BL = 0
 OLED_ID_BR = 1
 
 TIMEZONE_OFFSET = 0
-
-def now_utc():
-    return time.time()
-
-def now_local():
-    return time.localtime(time.time() + TIMEZONE_OFFSET)
+GPS_DATA = None
+GPS_FIX = asyncio.Event()
+NEW_FORECAST = asyncio.Event()
 
 wlan = WLAN()                                                                               # create WLAN object
 networks = wlan.scanWiFi()                                                                  # scan for the WLAN
-wlan.connectWiFi()                                                                          # connect to the WLAN
-print("WiFi Connected:", wlan.checkWiFi())                                                  # and double check
+# wlan.connectWiFi()                                                                          # connect to the WLAN
+# print("WiFi Connected:", wlan.checkWiFi())                                                  # and double check
 
 pico_rtc = RTC()                                                                            # create Real Time Clock
 
@@ -54,7 +51,8 @@ disp8 = HT16K33LED(i2c)                                                         
 disp4H = LED4digdisp(1, PIN_LED4H_SCL, PIN_LED4H_SDA)                                       # Create 4digit LED object (HIGH)         
 disp4L = LED4digdisp(2, PIN_LED4L_SCL, PIN_LED4L_SDA)                                       # Create 4digit LED object (LOW)
 
-BoMInfo = BoMdata.BoMForecast()                                                             # Create the BoM data structure
+BoMLocInfo = BoMdata.BoMLocation()                                                          # Create the BoM Location data structure
+BoMForecastInfo = BoMdata.BoMForecast()                                                     # Create the BoM Forecast data structure
 TimezoneInfo = AusTimeZones.LocalTimezone()                                                 # Create the Timezone data structure
 
 disp8.set_brightness(15)
@@ -70,41 +68,97 @@ oledBL = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
 mux.select_port(OLED_ID_BR)
 oledBR = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
 
-async def process_GPS():
-    # do something
-    test = 0
+def now_utc():
+    return time.time()
 
-async def get_time():
-    # do something
-    test = 0
+def now_local():
+    return time.localtime(time.time() + TIMEZONE_OFFSET)
 
-async def apply_timezone():
-    # do something
-    test = 0
+async def get_GPS_fix():
+    if GPS_obj.has_fix == True:
+        return
+    if not GPS_FIX.is_set():
+        while GPS_obj.has_fix == False:
+            GPS_obj.get_data()
+            NumOfSats = (f"GPSSAT {GPS_obj.satellites}")
+            asyncio.create_task(update_8dig_disp(NumOfSats, "l"))
+            await asyncio.sleep(1)
+        GPS_FIX.set()
+    await GPS_FIX.wait()
+    return
+
+async def get_GPS_data():
+    global GPS_DATA
+    if GPS_obj.has_fix == False:
+        GPS_FIX.clear()
+        await get_GPS_fix()
+    GPS_DATA = GPS_obj.get_data()
+    return
+
+async def update_GPS_data():
+    global GPS_DATA
+    while True:
+        if GPS_obj.has_fix == False:
+            GPS_FIX.clear()
+            await get_GPS_fix()
+        GPS_DATA = GPS_obj.get_data()
+        await asyncio.sleep(30)
 
 async def sync_time():
-    # do something
-    test = 0
+    global GPS_DATA
+    global TIMEZONE_OFFSET
+    while True:
+        if GPS_obj.has_fix == False:
+            GPS_FIX.clear()
+            await get_GPS_fix()
+        epoch = time.mktime((GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second, 0, 0))
+        weekday = time.localtime(epoch)[6]
+        pico_rtc.datetime((GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, weekday, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second, 0))
+        TimezoneInfo.update_localtime(GPS_DATA.latitude,GPS_DATA.longitude,(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second))
+        TIMEZONE_OFFSET = TimezoneInfo.tz_offset_minutes * 60
+        await asyncio.sleep(60)
 
-async def get_coordinates():
-    # do something
-    test = 0
-
-async def get_geohash():
-    # do something
-    test = 0
+async def check_new_forecast():
+    global NEW_FORECAST
+    while True:
+        # if the current time is a few minutes past the forecast JSON's "next_update_time", set the event
+        # do the check here
+        NEW_FORECAST.set()
+        await asyncio.sleep(1)
+        NEW_FORECAST.clear()
+        await asyncio.sleep(600)
 
 async def get_location():
-    # do something
-    test = 0
+    global GPS_DATA
+    global NEW_FORECAST
+    while True:
+        await NEW_FORECAST.wait()
+        if GPS_obj.has_fix == False:
+            GPS_FIX.clear()
+            await get_GPS_fix()
+        geohash = Geohash.encode(GPS_DATA.latitude, GPS_DATA.longitude, precision=7)
+        if geohash != BoMLocInfo.loc_geohash:
+            BoMLocInfo.update_location(geohash)
+            LocName = BoMLocInfo.loc_name
+            LocState = BoMLocInfo.loc_state
+            # update the screen with the name and state here
 
 async def get_forecast():
-    # do something
-    test = 0
+    global GPS_DATA
+    while True:
+        await NEW_FORECAST.wait()
+        if GPS_obj.has_fix == False:
+            GPS_FIX.clear()
+            await get_GPS_fix()
+        # get the forecast from the thing
+        # update some displays or something
 
 async def display_time():
     # do something
     test = 0
+
+async def update_8dig_disp(disp_string, alignment = "l"):
+    disp8.set_string(disp_string, alignment)
 
 async def display_temperatures():
     # do something
@@ -122,6 +176,8 @@ async def main():
     # do something
     test = 0
 
+asyncio.run(get_GPS_fix())
+
 while True:
     gps_data = GPS_obj.get_data()
     sat_string = (f"GPSSAT {gps_data.satellites}")
@@ -133,6 +189,7 @@ while True:
 
         timezonetime = TimezoneInfo.update_localtime(gps_data.latitude,gps_data.longitude,(gps_data.year, gps_data.month, gps_data.day, gps_data.hour, gps_data.minute, gps_data.second))
         print(f"GPS: {gps_data.latitude} {gps_data.longitude}")
+        print(TimezoneInfo.tz_offset_minutes)
         # DO NOT DELETE
         TIMEZONE_OFFSET = timezonetime.offset_minutes * 60
         time.sleep(1)
@@ -158,7 +215,7 @@ while True:
         print(f"GeoHash: {gh_output}")
         time.sleep(1)
 
-        jsonData = BoMInfo.update_location(gh_output)
+        jsonData = BoMLocInfo.update_location(gh_output)
         print(f"JSON: {jsonData}")
         time.sleep(1)
 
