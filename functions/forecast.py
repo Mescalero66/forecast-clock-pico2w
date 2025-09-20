@@ -42,8 +42,7 @@ class BoMLocation:
                 self.loc_current_data.loc_name = json_data["data"]["name"]
                 self.loc_current_data.loc_state = json_data["data"]["state"]
                 response.close()
-                self.loc_valid_data = True
-                return
+                return self.loc_current_data
             else:
                 print(f"Error: HTTP Status Code when fetching Location JSON  {response.status_code}")
                 self.loc_valid_data = False
@@ -55,13 +54,11 @@ class BoMLocation:
     # direct access properties
     @property
     def loc_name(self):
-        self.update()
-        return self.current_data.name
+        return self.loc_current_data.loc_name
     
     @property
     def loc_state(self):
-        self.update()
-        return self.current_data.state
+        return self.loc_current_data.loc_state
 
 class ForecastMetadata:
     def __init__(self):
@@ -89,23 +86,15 @@ class ForecastData:
 class BoMForecast:
     def __init__(self):
         self.fc_metadata = ForecastMetadata()
-        self.fc_current_data = [ForecastData() for _ in range(8)]
+        self.fc_current_data = [ForecastData() for _ in range(7)]
         
     def update_forecast(self, geoHash):
-        now = time.time()
-        if self.fc_metadata.fc_next_issue_time:
-            # if we've already got the next issue time, set the time to re-check
-            next = time.mktime(time.strptime(self.fc_metadata.fc_next_issue_time, "%Y-%m-%dT%H:%M:%SZ")) + 120
-        else:
-            # otherwise, force a refresh
-            next = 0
-
-        if self.fc_metadata.fc_geohash == geoHash or self.fc_current_data[0].fc_date != "" or (now > next):
-            self.fc_current_data = self.parse_forecast_json(geoHash)
-            return self.fc_current_data
+        if self.fc_metadata.fc_geohash != geoHash or self.fc_current_data[0].fc_date != "":
+            self.fc_metadata, self.fc_current_data = self.parse_forecast_json(geoHash)
+            return self.fc_metadata, self.fc_current_data
         else:
             # if the location hasn't changed, and we have existing data, and we haven't passed the next issue time, don't get the JSON again.
-            return self.fc_current_data
+            return self.fc_metadata, self.fc_current_data
     
     def parse_forecast_json(self, geoHash):
         fc_url = f"https://api.weather.bom.gov.au/v1/locations/{geoHash}/forecasts/daily"
@@ -119,30 +108,29 @@ class BoMForecast:
                 json_response = response.json()
                 # parse metadata
                 json_meta = json_response["metadata"]
-                self.fc_response_timestamp = json_meta["response_timestamp"]
-                self.fc_issue_time = json_meta["issue_time"]
-                self.fc_next_issue_time = json_meta["next_issue_time"]
-                self.fc_geohash = geoHash
+                self.fc_metadata.fc_response_timestamp = json_meta["response_timestamp"]
+                self.fc_metadata.fc_issue_time = json_meta["issue_time"]
+                self.fc_metadata.fc_next_issue_time = json_meta["next_issue_time"]
+                self.fc_metadata.fc_geohash = geoHash
 
                 json_days = json_response["data"]
                 for i, day in enumerate(json_days):
                     if i >= len(self.fc_current_data):
                         break
                     dd = self.fc_current_data[i]
-                    dd.fc_date = time.mktime(time.strptime((json_days["date"]), "%Y-%m-%dT%H:%M:%SZ"))
-                    dd.fc_rain_chance = json_days["rain"]["chance"]
-                    dd.fc_uv_index = json_days["uv"]["max_index"]
-                    dd.fc_sunrise = json_days["astronomical"]["sunrise_time"]
-                    dd.fc_sunset = json_days["astronomical"]["sunset_time"]
-                    dd.fc_date = json_days["date"]
-                    dd.fc_temp_max = json_days["temp_max"]
-                    dd.fc_temp_min = json_days["temp_min"]
-                    dd.fc_icon_descriptor = json_days["icon_descriptor"]
-                    dd.fc_short_text = json_days["short_text"]
-                    dd.fc_extended_text = json_days["extended_text"]
-                    response.close()
-                    self.fc_valid_data = True
-                    return json_days
+                    dd.fc_date = day["date"]
+                    dd.fc_rain_chance = day["rain"]["chance"]
+                    dd.fc_uv_index = day["uv"]["max_index"]
+                    dd.fc_sunrise = day["astronomical"]["sunrise_time"]
+                    dd.fc_sunset = day["astronomical"]["sunset_time"]
+                    dd.fc_temp_max = day["temp_max"]
+                    dd.fc_temp_min = day["temp_min"]
+                    dd.fc_icon_descriptor = day["icon_descriptor"]
+                    dd.fc_short_text = day["short_text"]
+                    dd.fc_extended_text = day["extended_text"]
+                response.close()
+                self.fc_valid_data = True
+                return self.fc_metadata, self.fc_current_data
                 
         except Exception as e:
             print(f"Error resolving Forecast Data from geoHash [{geoHash}]: {e}")
