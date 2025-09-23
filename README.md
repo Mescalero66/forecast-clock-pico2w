@@ -22,6 +22,9 @@
  - https://github.com/peterhinch/micropython-async/blob/master/v3/docs/TUTORIAL.md
 
  - https://api.weather.bom.gov.au/v1/locations/r1r0mgn/
+ - https://api.weather.bom.gov.au/v1/locations/r1r0mgn/forecasts/daily
+
+ - https://reg.bom.gov.au/info/forecast_icons.shtml
 
  - https://docs.micropython.org/en/latest/library/json.html
  

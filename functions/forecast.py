@@ -68,20 +68,22 @@ class ForecastMetadata:
         self.fc_issue_time = ""
         self.fc_next_issue_time = ""
         self.fc_geohash = ""
+        self.fc_overnight_min = None
 
 class ForecastData:
     def __init__(self):
         # BoM Forecasts/Daily JSON Data
-        self.fc_rain_chance = 0
-        self.fc_uv_index = 0
+        self.fc_rain_chance = None
+        self.fc_uv_index = None
         self.fc_sunrise = ""
         self.fc_sunset = ""
         self.fc_date = ""
-        self.fc_temp_max = 0
-        self.fc_temp_min = 0
+        self.fc_temp_max = None
+        self.fc_temp_min = None
         self.fc_icon_descriptor = ""
         self.fc_short_text = ""
         self.fc_extended_text = ""
+
 
 class BoMForecast:
     def __init__(self):
@@ -128,6 +130,14 @@ class BoMForecast:
                     dd.fc_icon_descriptor = day["icon_descriptor"]
                     dd.fc_short_text = day["short_text"]
                     dd.fc_extended_text = day["extended_text"]
+                    if i == 0:
+                        if day["now"]["now_label"] == "Overnight min":
+                            self.fc_metadata.fc_overnight_min = day["temp_now"]
+                        elif json_days["now"]["later_label"] == "Overnight min":
+                            self.fc_metadata.fc_overnight_min = day["temp_later"]
+                    if i == 1 and self.fc_metadata.fc_overnight_min == None:
+                        self.fc_metadata.fc_overnight_min = day["temp_min"]
+                
                 response.close()
                 self.fc_valid_data = True
                 return self.fc_metadata, self.fc_current_data
