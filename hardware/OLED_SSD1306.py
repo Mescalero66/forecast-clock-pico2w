@@ -190,6 +190,10 @@ class SSD1306(framebuf.FrameBuffer):
         self.vline(x, y, h, c)
         self.vline(x+w, y, h, c)
                     
+    def fill(self, c):
+        for i in range(0, self.height):
+            self.hline(0, i, self.width, c)
+    
     def fill_rect(self, x, y, w, h, c):
         for i in range(y, y + h):
             self.hline(x, i, w, c)
@@ -279,16 +283,17 @@ class SSD1306(framebuf.FrameBuffer):
         text = str(text)
         total_width = len(text) * 8
         if x is None:
-            x_start = (self.width - total_width) // 2
-        else:
-            x_start = x
+            x = (self.width - total_width) // 2
+
+        if y is None:
+            y = (BANNER_HEIGHT)
 
         for text_index in range(len(text)):
             for col in range(8):
                 fontDataPixelValues = self.font[(ord(text[text_index]) - 32) * 8 + col]
                 for i in range(7):
                     if fontDataPixelValues & (1 << i) != 0:
-                        x_coordinate = x_start + col + text_index * 8
+                        x_coordinate = x + col + text_index * 8
                         y_coordinate = y + i
                         if x_coordinate < self.width and y_coordinate < self.height:
                             self.pixel(x_coordinate, y_coordinate, c)
