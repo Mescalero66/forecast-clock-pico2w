@@ -9,7 +9,7 @@ class WLAN:
     def __init__(self):
         self.wlan_obj = network.WLAN(network.WLAN.IF_STA)
 
-    def connectWiFi(self, retries=3, wait_per_try=10):
+    def connectWiFi(self, retries=5, wait_per_try=5):
         """
         Connect to WiFi with retries and clear status reporting.
         """

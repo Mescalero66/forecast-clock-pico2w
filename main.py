@@ -68,6 +68,7 @@ TM_ICON = None
 TM_TEXT = None
 
 wlan = WLAN()                                                                               # create WLAN object
+wlan.disconnectWiFi()
 networks = wlan.scanWiFi()                                                                  # scan for the WLAN
 wlan.connectWiFi()                                                                          # connect to the WLAN
 print("WiFi Connected:", wlan.checkWiFi())                                                  # and double check
@@ -102,8 +103,6 @@ mux.select_port(OLED_ID_BL)
 oledBL = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
 mux.select_port(OLED_ID_BR)
 oledBR = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
-
-
 
 def now_utc():
     return time.time()
@@ -234,12 +233,12 @@ async def get_location():
     if GPS_DATA is None:
         await get_GPS_data()
     GEOHASH = Geohash.encode(GPS_DATA.latitude, GPS_DATA.longitude, precision=7)
-    print(GEOHASH)
+    # print(GEOHASH)
     if GEOHASH != BoMLocInfo.loc_current_data.loc_geohash:
         BoMLocInfo.update_location(GEOHASH)
         C_LN = BoMLocInfo.loc_current_data.loc_name
         C_LS = BoMLocInfo.loc_current_data.loc_state
-        print("Location: ", C_LN)
+        # print("Location: ", C_LN)
     return GEOHASH
 
 
@@ -275,8 +274,7 @@ async def get_forecast():
         await get_location()
     fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
     ny, nm, nd, _, _, _, _, _ = time.gmtime()
-    timetuple = parse_iso8601_datetime(fc_data[0].fc_date)
-    epoch = to_epoch(timetuple)
+    epoch = to_epoch(parse_iso8601_datetime(fc_data[0].fc_date))
     tdy, tdm, tdd, _, _, _, _, _ = to_local(epoch)
     # tdy, tdm, tdd, _, _, _, _, _ = to_local(to_epoch(parse_iso8601_datetime(fc_data[0].fc_date)))
     print(ny, " ", nm, " ", nd)
@@ -312,13 +310,13 @@ async def update_temperature_display():
         print("update_temperature_display()")
         if TD_MAX != None:
             _, _, _, hh, _, _, _, _ = now_local()
-            str_tmr = str(TM_MAX + "*c")
+            str_tmr = f"{TM_MAX:02}*c"
             disp4L.show_string(str_tmr)
             if hh < 3 or hh > 17:
-                str_onl = str(ON_LOW + "*c")
+                str_onl = f"{ON_LOW:02}*c"
                 disp4H.show_string(str_onl)
             else:
-                str_tdy = str(TD_MAX + "*c")
+                str_tdy = f"{TD_MAX:02}*c"
                 disp4H.show_string(str_tdy)
             await asyncio.sleep(59)
         else:
@@ -331,13 +329,13 @@ async def refresh_left_oleds():
     
     oledTL.fill(0)
     oledTL.banner_text_inverted(str_td_dow)
-    str_td_date = str(C_Y + " / " + C_M + " / " + C_D)
+    str_td_date = f"{C_Y:02} / {C_M:02} / {C_D:02}"
     oledTL.subbanner_text(str_td_date)
     oledTL.subbanner_text(C_LN, y=48)
 
     oledBL.fill(0)
     oledBL.banner_text_inverted(str_tm_dow)
-    str_tm_date = str(TM_Y + " / " + TM_M + " / " + TM_D)
+    str_tm_date = f"{TM_Y:02} / {TM_M:02} / {TM_D:02}"
     oledBL.subbanner_text(str_tm_date)
     oledBL.subbanner_text(C_LN, y=48)
 
