@@ -20,7 +20,7 @@ class BoMLocation:
         self.loc_current_data = LocationData()
     
     def update_location(self, geoHash):
-        if self.loc_current_data.loc_geohash == geoHash and self.loc_current_data.loc_id != "":
+        if self.loc_current_data.loc_geohash == geoHash and self.loc_current_data.loc_id != None:
             return self.loc_current_data
             # if the location hasn't changed, and there is existing location data, we don't need to check it again.
         else:
@@ -30,7 +30,11 @@ class BoMLocation:
     def parse_location_json(self, geoHash):
         loc_url = f"https://api.weather.bom.gov.au/v1/locations/{geoHash}/"
         try:
-            response = urequests.get(loc_url)
+            response = urequests.get(loc_url, timeout=5)
+            if not hasattr(response, "status_code"):
+                print(f"Error resolving Location Data from geoHash [{geoHash}]: invalid response")
+                self.loc_valid_data = False
+                return None
             if response.status_code == 200:
                 json_data = response.json()
                 self.loc_response_timestamp = json_data["metadata"]["response_timestamp"]
@@ -42,14 +46,16 @@ class BoMLocation:
                 self.loc_current_data.loc_name = json_data["data"]["name"]
                 self.loc_current_data.loc_state = json_data["data"]["state"]
                 response.close()
+                self.loc_valid_data = True
                 return self.loc_current_data
             else:
                 print(f"Error: HTTP Status Code when fetching Location JSON  {response.status_code}")
                 self.loc_valid_data = False
+                return None
         except Exception as e:
             print(f"Error resolving Location Data from geoHash [{geoHash}]: {e}")
             self.loc_valid_data = False
-            return
+            return None
 
     # direct access properties
     @property
@@ -101,11 +107,11 @@ class BoMForecast:
     def parse_forecast_json(self, geoHash):
         fc_url = f"https://api.weather.bom.gov.au/v1/locations/{geoHash}/forecasts/daily"
         try:
-            response = urequests.get(fc_url)
+            response = urequests.get(fc_url, timeout=5)
             if response.status_code != 200:
                 print(f"Error: HTTP Status Code when Fetching Forecast JSON {response.status_code}")
                 self.fc_valid_data = False
-                return
+                return self.fc_metadata, self.fc_current_data
             else:
                 json_response = response.json()
                 # parse metadata
@@ -133,7 +139,7 @@ class BoMForecast:
                     if i == 0:
                         if day["now"]["now_label"] == "Overnight min":
                             self.fc_metadata.fc_overnight_min = day["temp_now"]
-                        elif json_days["now"]["later_label"] == "Overnight min":
+                        elif day["now"]["later_label"] == "Overnight min":
                             self.fc_metadata.fc_overnight_min = day["temp_later"]
                     if i == 1 and self.fc_metadata.fc_overnight_min == None:
                         self.fc_metadata.fc_overnight_min = day["temp_min"]
@@ -145,4 +151,4 @@ class BoMForecast:
         except Exception as e:
             print(f"Error resolving Forecast Data from geoHash [{geoHash}]: {e}")
             self.fc_valid_data = False
-            return
+            return self.fc_metadata, self.fc_current_data
