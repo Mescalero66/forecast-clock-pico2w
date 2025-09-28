@@ -116,6 +116,17 @@ def to_local(epoch_seconds):
 def to_epoch(time_tuple):
     return time.mktime(time_tuple)
 
+def get_weekday(GPSy, GPSm, GPSd):
+    y, m, d = GPSy, GPSm, GPSd
+    if m < 3:
+        m += 12
+        y -= 1
+    K = y % 100
+    J = y // 100
+    weekday = (d + (13*(m+1))//5 + K + K//4 + J//4 + 5*J) % 7
+    weekday = (weekday + 6) % 7
+    return weekday
+
 def parse_iso8601_datetime(ts: str) -> int:
     try:
         date, timepart = ts.split("T")
@@ -143,7 +154,6 @@ def parse_iso8601_datetime(ts: str) -> int:
     # Build time tuple for mktime
     return time.mktime((year, month, day, hh, mm, ss, 0, 0))
 
-
 def parse_iso8601_date(ts: str):
     if not ts or not ts.strip():
         raise ValueError("Empty date string")
@@ -155,12 +165,10 @@ def parse_iso8601_date(ts: str):
         raise ValueError(f"Invalid date string '{ts}': {e}")
     return year, month, day
 
-
 async def check_Wifi():
     if wlan.checkWiFi() == True:
         return
     wlan.connectWiFi(retries=5, wait_per_try=20)
-
 
 async def get_GPS_fix():
     print("get_GPS_fix()")
@@ -170,11 +178,12 @@ async def get_GPS_fix():
     if not GPS_FIX.is_set():
         while not GPS_obj.has_fix:
             GPS_obj.get_data()
+            NoS = f"Sats:  {GPS_obj.satellites}"
+            update_8dig_disp(NoS, "r")
             await asyncio.sleep(1)
         GPS_FIX.set()
     await GPS_FIX.wait()
     return
-
 
 async def get_GPS_data():
     global GPS_DATA
@@ -184,7 +193,6 @@ async def get_GPS_data():
     GPS_DATA = GPS_obj.get_data()
     return
 
-
 async def update_GPS_data():
     global GPS_DATA, GPS_FIX
     while True:
@@ -192,23 +200,21 @@ async def update_GPS_data():
         if not GPS_FIX.is_set():
             await GPS_FIX.wait()
         GPS_DATA = GPS_obj.get_data()
-        await asyncio.sleep(30)
-
+        await asyncio.sleep(60)
 
 async def update_time_sync():
-    global GPS_DATA, GPS_FIX, TIMEZONE_OFFSET
+    global GPS_FIX, TIMEZONE_OFFSET, C_Y, C_M, C_D, C_WD
     while True:
         print("update_time_sync()")
         if GPS_obj.has_fix == False:
             GPS_FIX.clear()
             await get_GPS_fix()
-        epoch = time.mktime((GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second, 0, 0))
-        weekday = time.localtime(epoch)[6]
+        weekday = get_weekday(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day)
         pico_rtc.datetime((GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, weekday, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second, 0))
         TimezoneInfo.update_localtime(GPS_DATA.latitude,GPS_DATA.longitude,(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second))
         TIMEZONE_OFFSET = TimezoneInfo.tz_offset_minutes * 60
-        await asyncio.sleep(32)
-
+        C_Y, C_M, C_D, _, _, _, C_WD, _ = now_local()
+        await asyncio.sleep(66)
 
 async def update_new_forecast_data():
     while True:
@@ -216,14 +222,14 @@ async def update_new_forecast_data():
         now = time.time()
         next_issue_time = BoMForecastInfo.fc_metadata.fc_next_issue_time
         if not next_issue_time:
-            next_issue_time = "2013-10-13T23:25:00Z"
+            next_issue_time = "2013-10-143T10:25:00Z"
         if now > parse_iso8601_datetime(next_issue_time):
-            asyncio.create_task(get_location())
-            await asyncio.sleep(2)
-            asyncio.create_task(get_forecast())
-            await asyncio.sleep(2)
+            await get_location()
+            if GEOHASH == None:
+                await get_location()
+            else:
+                asyncio.create_task(get_forecast())
         await asyncio.sleep(900)
-
 
 async def get_location():
     global GEOHASH, C_LN, C_LS
@@ -235,25 +241,29 @@ async def get_location():
     GEOHASH = Geohash.encode(GPS_DATA.latitude, GPS_DATA.longitude, precision=7)
     # print(GEOHASH)
     if GEOHASH != BoMLocInfo.loc_current_data.loc_geohash:
-        BoMLocInfo.update_location(GEOHASH)
-        C_LN = BoMLocInfo.loc_current_data.loc_name
-        C_LS = BoMLocInfo.loc_current_data.loc_state
-        # print("Location: ", C_LN)
+        try:
+            BoMLocInfo.update_location(GEOHASH)
+            await asyncio.sleep(2)
+            C_LN = BoMLocInfo.loc_current_data.loc_name
+            C_LS = BoMLocInfo.loc_current_data.loc_state
+            print("Location: ", C_LN)
+        except Exception as ex:
+            print(f"Location Update Failed: {ex}.")
+            await asyncio.sleep(5)
+            raise
     return GEOHASH
-
 
 async def update_clock_display():
     while True:
         y, m, d, hh, mm, ss, wd, _ = now_local()
-        if mm == 0 or hh == 0:
-            await date_check(y, m, d, wd)
         time_str = f"{hh:02} .{mm:02} .{ss:02}"
         disp8.set_string(time_str, "r")
         await asyncio.sleep(0.2)
+        if mm == 0 or hh == 0 or ss == 0:
+            await date_check(y, m, d, wd)
         time_str = f"{hh:02} {mm:02} {ss:02}"
         disp8.set_string(time_str, "r")       
         await asyncio.sleep(0.8)
-
 
 async def date_check(y, m, d, wd):
     global C_Y, C_M, C_D, C_WD
@@ -266,80 +276,86 @@ async def date_check(y, m, d, wd):
         C_D = d
         C_WD = wd
         asyncio.create_task(refresh_left_oleds())
-
+        return
 
 async def get_forecast():
     print("get_forecast()")
     if GEOHASH is None:
         await get_location()
-    fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
-    ny, nm, nd, _, _, _, _, _ = time.gmtime()
-    epoch = to_epoch(parse_iso8601_datetime(fc_data[0].fc_date))
-    tdy, tdm, tdd, _, _, _, _, _ = to_local(epoch)
-    # tdy, tdm, tdd, _, _, _, _, _ = to_local(to_epoch(parse_iso8601_datetime(fc_data[0].fc_date)))
-    print(ny, " ", nm, " ", nd)
-    print(tdy, " ", tdm, " ", tdd)
-    if ny != tdy or nm != tdm or nd != tdd:
-        print("BoM JSON Data Out of Sync with Current Date")
-        await asyncio.sleep(600)
-        asyncio.create_task(get_forecast())
-        return
-    
-    global TD_Y, TD_M, TD_M, TD_MAX, TD_MIN, TD_RAIN, TD_ICON, TD_TEXT
-    global ON_LOW
-    global TM_Y, TM_M, TM_D, TM_MAX, TM_MIN, TM_RAIN, TM_ICON, TM_TEXT
+    try:
+        fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
+        
+        global TD_Y, TD_M, TD_M, TD_MAX, TD_MIN, TD_RAIN, TD_ICON, TD_TEXT
+        global ON_LOW
+        global TM_Y, TM_M, TM_D, TM_MAX, TM_MIN, TM_RAIN, TM_ICON, TM_TEXT
 
-    TD_Y, TD_M, TD_M, _, _, _, _, _  = to_local(to_epoch(parse_iso8601_date(fc_data[0].fc_date)))
-    TM_Y, TM_M, TM_D, _, _, _, _, _  = to_local(to_epoch(parse_iso8601_date(fc_data[0].fc_date)))
+        TD_Y, TD_M, TD_M, _, _, _, _, _  = to_local(parse_iso8601_datetime(fc_data[0].fc_date))
+        TM_Y, TM_M, TM_D, _, _, _, _, _  = to_local(parse_iso8601_datetime(fc_data[1].fc_date))
 
-    TD_MAX = fc_data[0].fc_temp_max
-    TD_MIN = fc_data[0].fc_temp_min
-    TD_RAIN = fc_data[0].fc_rain_chance
-    TD_ICON = fc_data[0].fc_icon_descriptor
-    TD_TEXT = fc_data[0].fc_short_text
-    ON_LOW = fc_meta.fc_overnight_min
-    TM_MAX = fc_data[1].fc_temp_max
-    TM_MIN = fc_data[1].fc_temp_min
-    TM_RAIN = fc_data[1].fc_rain_chance
-    TM_ICON = fc_data[1].fc_icon_descriptor
-    TM_TEXT = fc_data[1].fc_short_text
-
+        TD_MAX = fc_data[0].fc_temp_max
+        TD_MIN = fc_data[0].fc_temp_min
+        TD_RAIN = fc_data[0].fc_rain_chance
+        TD_ICON = fc_data[0].fc_icon_descriptor
+        TD_TEXT = fc_data[0].fc_short_text
+        ON_LOW = fc_meta.fc_overnight_min
+        TM_MAX = fc_data[1].fc_temp_max
+        TM_MIN = fc_data[1].fc_temp_min
+        TM_RAIN = fc_data[1].fc_rain_chance
+        TM_ICON = fc_data[1].fc_icon_descriptor
+        TM_TEXT = fc_data[1].fc_short_text
+    except Exception as ex:
+        print(f"Forecast Update Failed: {ex}.")
+        await asyncio.sleep(5)
+        raise
 
 async def update_temperature_display():
      while True:
         print("update_temperature_display()")
-        if TD_MAX != None:
-            _, _, _, hh, _, _, _, _ = now_local()
-            str_tmr = f"{TM_MAX:02}*c"
-            disp4L.show_string(str_tmr)
-            if hh < 3 or hh > 17:
-                str_onl = f"{ON_LOW:02}*c"
-                disp4H.show_string(str_onl)
-            else:
-                str_tdy = f"{TD_MAX:02}*c"
-                disp4H.show_string(str_tdy)
-            await asyncio.sleep(59)
+        if TD_MAX == None:
+            try:
+                await get_forecast()
+            except Exception:
+                await asyncio.sleep(5)
+                continue
+        _, _, _, hh, _, _, _, _ = now_local()
+        str_tmr = f"{TM_MAX:02}*C"
+        disp4L.show_string(str_tmr)
+        if hh < 4 or hh > 17:
+            str_onl = f"{ON_LOW}*C"
+            disp4H.show_string(str_onl)
         else:
-            await asyncio.sleep(10)
+            str_tdy = f"{TD_MAX}*C"
+            disp4H.show_string(str_tdy)
+        await asyncio.sleep(115)
 
 async def refresh_left_oleds():
     print("refresh_left_oleds()")
+    if C_LN == None:
+        print("awaiting current location")
+        await get_location()
+    if TM_Y == None:
+        print("awaiting current forecast")
+        await get_forecast()
+
     str_td_dow = DAYS_OF_WEEK[C_WD % 7]
     str_tm_dow = DAYS_OF_WEEK[(C_WD + 1) % 7]
     
     oledTL.fill(0)
     oledTL.banner_text_inverted(str_td_dow)
-    str_td_date = f"{C_Y:02} / {C_M:02} / {C_D:02}"
-    oledTL.subbanner_text(str_td_date)
-    oledTL.subbanner_text(C_LN, y=48)
+    str_td_date = f"{C_D:02} / {C_M:02} / {C_Y:04}"
+    oledTL.custom_text(str_td_date, y=16, font_width=16, font_height=16, scale=1, c=1)
+    oledTL.custom_text(C_LN, y=48, font_width=12, font_height=12, scale=1, c=1)
 
     oledBL.fill(0)
     oledBL.banner_text_inverted(str_tm_dow)
-    str_tm_date = f"{TM_Y:02} / {TM_M:02} / {TM_D:02}"
-    oledBL.subbanner_text(str_tm_date)
-    oledBL.subbanner_text(C_LN, y=48)
+    str_tm_date = f"{TM_D:02} / {TM_M:02} / {TM_Y:04}"
+    oledBL.custom_text(str_tm_date, y=16, font_width=16, font_height=16, scale=1, c=1)
+    oledBL.custom_text(C_LN, y=48, font_width=12, font_height=12, scale=2, c=1)
 
+    print("displaying left LEDs")
+    mux.select_port(OLED_ID_TL)
     oledTL.show()
+    mux.select_port(OLED_ID_BL)
     oledBL.show()
 
 
@@ -354,19 +370,23 @@ async def main():
     # Sequential Tasks
     await get_GPS_fix()
     await get_GPS_data()
-    time.sleep(3)
 
-    # Infinite Tasks
+    tasks = []
 
-    infinites = [
-        asyncio.create_task(update_clock_display()),
-        asyncio.create_task(update_GPS_data()),
-        asyncio.create_task(update_time_sync()),
-        asyncio.create_task(update_new_forecast_data()),
-        asyncio.create_task(update_temperature_display())
-    ]    
-    
-    await asyncio.gather(*infinites)
+    if not GPS_DATA.has_fix:
+        await get_GPS_data()
+    else:
+        tasks.append(asyncio.create_task(update_time_sync()))
+        await asyncio.sleep(1)
+        tasks.append(asyncio.create_task(update_clock_display()))
+        await asyncio.sleep(2)
+        tasks.append(asyncio.create_task(update_GPS_data()))
+        await asyncio.sleep(2)
+        tasks.append(asyncio.create_task(update_new_forecast_data()))
+        await asyncio.sleep(3)
+        tasks.append(asyncio.create_task(update_temperature_display()))
+
+    await asyncio.gather(*tasks)
     print("Everything should be started now!")
 
 asyncio.run(main())

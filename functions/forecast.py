@@ -57,15 +57,6 @@ class BoMLocation:
             self.loc_valid_data = False
             return None
 
-    # direct access properties
-    @property
-    def loc_name(self):
-        return self.loc_current_data.loc_name
-    
-    @property
-    def loc_state(self):
-        return self.loc_current_data.loc_state
-
 class ForecastMetadata:
     def __init__(self):
         # BoM Forecasts/Daily JSON Metadata
@@ -97,7 +88,7 @@ class BoMForecast:
         self.fc_current_data = [ForecastData() for _ in range(7)]
         
     def update_forecast(self, geoHash):
-        if self.fc_metadata.fc_geohash != geoHash or self.fc_current_data[0].fc_date != "":
+        if self.fc_metadata.fc_geohash != geoHash or self.fc_current_data[0].fc_date == "":
             self.fc_metadata, self.fc_current_data = self.parse_forecast_json(geoHash)
             return self.fc_metadata, self.fc_current_data
         else:
@@ -137,10 +128,12 @@ class BoMForecast:
                     dd.fc_short_text = day["short_text"]
                     dd.fc_extended_text = day["extended_text"]
                     if i == 0:
-                        if day["now"]["now_label"] == "Overnight min":
-                            self.fc_metadata.fc_overnight_min = day["temp_now"]
-                        elif day["now"]["later_label"] == "Overnight min":
-                            self.fc_metadata.fc_overnight_min = day["temp_later"]
+                        now_block = day.get("now")
+                        if now_block:
+                            if now_block.get("now_label") == "Overnight min":
+                                self.fc_metadata.fc_overnight_min = day.get("temp_now")
+                            elif now_block.get("later_label") == "Overnight min":
+                                self.fc_metadata.fc_overnight_min = day.get("temp_later")
                     if i == 1 and self.fc_metadata.fc_overnight_min == None:
                         self.fc_metadata.fc_overnight_min = day["temp_min"]
                 

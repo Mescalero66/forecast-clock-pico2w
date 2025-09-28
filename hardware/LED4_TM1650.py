@@ -59,8 +59,8 @@ characterBytes = [
     0x63,  # [38] degrees °
     0x48,  # [39] equal =
     0x08,  # [40] underscore _
-    0x00,  # [41] reserved
-    0x00,  # [42] reserved
+    0x58,  # [41] lowercase 'c' normal
+    0x61,  # [42] lowercase 'c' upper
     0x00,  # [43] reserved
     0x00,  # [44] reserved
     0x00   # [45] reserved
@@ -367,25 +367,31 @@ class LED4digdisp:
         return char_code
     
     def char_to_index(self, c):
-        if isinstance(c, str):
-            c = c.upper()
-            c = ord(c)
+        # If input is int (ASCII code), convert to string
+        if isinstance(c, int):
+            c = chr(c)
+
+        # Handle custom specials first
+        if c == "c":        # normal lowercase 'c'
+            return 41
+        if c == "^":        # top lowercase 'c'
+            return 42
+        if c == "*":        # degree symbol
+            return 38
 
         # Digits 0–9
-        if 0x30 <= c <= 0x39:
-            return c - 0x30  # 0–9
+        if "0" <= c <= "9":
+            return ord(c) - ord("0")
 
         # Letters A–Z
-        if 0x41 <= c <= 0x5A:
-            return 10 + (c - 0x41)  # A=10, B=11, ..., Z=35
+        if "A" <= c.upper() <= "Z":
+            return 10 + (ord(c.upper()) - ord("A"))
 
-        # Special characters
+        # Other special characters
         special_map = {
-            0x20: 36,  # space
-            0x2D: 37,  # dash
-            0xB0: 38,  # degree °
-            0x2A: 38,  # * = degree symbol
-            0x3D: 39,  # equal =
-            0x5F: 40,  # underscore _
+            " ": 36,
+            "-": 37,
+            "=": 39,
+            "_": 40,
         }
         return special_map.get(c, 36)  # fallback to space

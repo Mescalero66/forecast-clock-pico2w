@@ -298,6 +298,35 @@ class SSD1306(framebuf.FrameBuffer):
                         if x_coordinate < self.width and y_coordinate < self.height:
                             self.pixel(x_coordinate, y_coordinate, c)
 
+    def custom_text(self, text, y=0, font_width = 8, font_height = 8, scale = 1, c=1):
+        text = str(text)
+        scale_x = scale * 3
+        scale_y = scale * 4
+        char_width = font_width * scale_x + 2
+        char_height = font_height * scale_y
+
+        # Horizontal centering
+        total_width = len(text) * char_width
+        x_start = (self.width - total_width) // 2
+
+        # Draw each character
+        for text_index, char in enumerate(text):
+            for col in range(font_width):
+                font_byte = self.font[(ord(char) - 32) * font_width + col]
+                x_pos = x_start + text_index * char_width + col * scale_x
+                for dx in range(scale_x):                                   # horizontal scaling
+                    x = x_pos + dx
+                    if x >= self.width:
+                        continue
+                    for row in range(font_height):
+                        pixel_on = (font_byte >> row) & 1
+                        if pixel_on:
+                            y_pos = y + row * scale_y
+                            for dy in range(scale_y):                       # vertical scaling
+                                y = y_pos + dy
+                                if y < self.height:
+                                    self.pixel(x, y, c)
+
     def date_text(self, text, y_start=0, c=1):
         text = str(text)
         font_width = 8                          # font is 8 pixels wide
