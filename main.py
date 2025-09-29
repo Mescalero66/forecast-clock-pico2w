@@ -235,13 +235,13 @@ async def update_GPS_data():
             if not GPS_obj.has_fix:
                 await get_GPS_fix()
         GPS_DATA = GPS_obj.get_data()
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(1)
         if not GPS_DATA.year == None:
             VALID_GPS_DATA = True
         else:
             VALID_GPS_DATA = False
 
-async def update_time_sync():
+async def update_time_sync(initial):
     global TIMEZONE_OFFSET, C_Y, C_M, C_D, C_WD
     while True:
         print("update_time_sync()")
@@ -256,7 +256,9 @@ async def update_time_sync():
         if TIMEZONE_OFFSET == None:
             await asyncio.sleep(5)
         else:
-            await asyncio.sleep(45)
+            await asyncio.sleep(90)
+            if initial:
+                return
 
 async def update_new_forecast_data():
     await asyncio.sleep(10)
@@ -311,10 +313,14 @@ async def get_location():
         VALID_LOCATION_DATA = False
 
 async def update_clock_display():
+    global GPS_DATA
     while TIMEZONE_OFFSET == None:
         print("update_clock_display() dreams of a non-zero TIMEZONE_OFFSET...")
         await asyncio.sleep(7)
     while True:
+        GPS_DATA = GPS_obj.get_data()
+        weekday = get_weekday(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day)
+        pico_rtc.datetime((GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, weekday, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second, 0))
         y, m, d, hh, mm, ss, wd, _ = now_local()
         time_str = f"{hh:02} .{mm:02} .{ss:02}"
         disp8.set_string(time_str, "r")
@@ -344,8 +350,6 @@ async def get_forecast():
     while not VALID_GEOHASH_DATA:
         print("get_forecast() dreams of VALID_GEOHASH_DATA...")
         await asyncio.sleep(20)
-        if not VALID_GEOHASH_DATA:
-            await get_location()
     validText = None
     fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
     TD_Y, TD_M, TD_M, _, _, _, _, _  = to_local(parse_iso8601_datetime(fc_data[0].fc_date))
@@ -369,8 +373,6 @@ async def update_temperature_display():
     while not VALID_FORECAST_DATA:
         print("update_temperature_display() dreams of VALID_FORECAST_DATA...")
         await asyncio.sleep(20)
-        if not VALID_FORECAST_DATA:
-            await get_forecast()
     while True:
         print("update_temperature_display()")
         _, _, _, hh, _, _, _, _ = now_local()
@@ -392,10 +394,6 @@ async def refresh_left_oleds():
     while not VALID_LOCATION_DATA or not VALID_FORECAST_DATA:
         print("refresh_left_oleds() dreams of VALID_FORECAST_DATA and/or VALID_LOCATION_DATA")
         await asyncio.sleep(15)
-        if not VALID_LOCATION_DATA:
-            await get_location()
-        if not VALID_FORECAST_DATA:
-            await get_forecast()
 
     str_td_dow = DAYS_OF_WEEK[C_WD % 7]
     str_tm_dow = DAYS_OF_WEEK[(C_WD + 1) % 7]
@@ -434,7 +432,27 @@ async def main():
     if not VALID_GPS_DATA:
         await get_GPS_data()                                                    # if the GPS data didn't make it, try one more time
     
+    await update_time_sync(initial=True)
+    await get_location()
+    await get_forecast()
+
     tasks = []
+
+    tasks.append(asyncio.create_task(update_clock_display()))
+    await asyncio.sleep(1)
+    tasks.append(asyncio.create_task(update_temperature_display()))
+    await asyncio.sleep(1)
+
+    tasks.append(asyncio.create_task(update_time_sync()))
+    await asyncio.sleep(1)
+    tasks.append(asyncio.create_task(update_new_forecast_data()))
+    await asyncio.sleep(1)
+
+    # tasks.append(asyncio.create_task(update_GPS_data()))
+
+    print("ALL TASKS STARTED!")
+    while True:
+        await asyncio.sleep(1)
 
     # while not VALID_GPS_DATA:
     #     await asyncio.sleep(1)
@@ -457,17 +475,7 @@ async def main():
     # while not VALID_FORECAST_DATA:
     #     await asyncio.sleep(1)
     # tasks.append(asyncio.create_task(update_temperature_display()))
-    # await asyncio.sleep(2)
-
-    tasks.append(asyncio.create_task(update_time_sync()))
-    tasks.append(asyncio.create_task(update_clock_display()))
-    tasks.append(asyncio.create_task(update_GPS_data()))
-    tasks.append(asyncio.create_task(update_new_forecast_data()))
-    tasks.append(asyncio.create_task(update_temperature_display()))
-
-    print("ALL TASKS STARTED!")
-    while True:
-        await asyncio.sleep(1)
+    # await asyncio.sleep(2)    
     
 try:
     asyncio.run(main())
