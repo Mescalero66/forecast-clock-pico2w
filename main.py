@@ -276,8 +276,8 @@ async def update_new_forecast_data():
         await asyncio.sleep(900)
 
 async def get_location():
-    global GEOHASH, C_LN, C_LS, VALID_GEOHASH_DATA, VALID_LOCATION_DATA
-    print(f"get_location() with geohash: [{GEOHASH}]")
+    global GPS_DATA, GEOHASH, C_LN, C_LS, VALID_GEOHASH_DATA, VALID_LOCATION_DATA
+    print(f"get_location()")
     if not GEOHASH:
         VALID_GEOHASH_DATA = False
     if BoMLocInfo == None:
@@ -286,12 +286,16 @@ async def get_location():
         print("get_location() dreams of VALID_GPS_DATA...")
         await asyncio.sleep(7)
     try:
+        GPS_DATA = GPS_obj.get_data()
         lat = float(GPS_DATA.latitude)
         long = float(GPS_DATA.longitude)
+        print(f"Lat: [{lat}] Long: [{long}]")
         newGeohash = Geohash.encode(lat, long, precision=7)
+        print(f"newGeohash: [{newGeohash}]")
         if not newGeohash == GEOHASH:
             GEOHASH = newGeohash
             VALID_GEOHASH_DATA = True
+        print(f"GEOHASH: [{GEOHASH}]")
         LocationData = BoMLocInfo.update_location(GEOHASH)
         print(LocationData)
         await asyncio.sleep(2)
@@ -385,7 +389,7 @@ async def refresh_left_oleds():
     print("refresh_left_oleds()")
 
     await asyncio.sleep(0)
-    
+
     while not VALID_LOCATION_DATA or not VALID_FORECAST_DATA:
         print("refresh_left_oleds() dreams of VALID_FORECAST_DATA and/or VALID_LOCATION_DATA")
         await asyncio.sleep(15)
