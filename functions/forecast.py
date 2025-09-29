@@ -30,7 +30,7 @@ class BoMLocation:
     
     def parse_location_json(self, geoHash):
         loc_url = f"https://api.weather.bom.gov.au/v1/locations/{geoHash}/"
-        # print(f"BoM: ", {loc_url})
+        print(f"BoM: ", {loc_url})
         for attempt in range(3):
             try:
                 response = urequests.get(loc_url, timeout=5)
@@ -98,7 +98,7 @@ class BoMForecast:
     
     def parse_forecast_json(self, geoHash):
         fc_url = f"https://api.weather.bom.gov.au/v1/locations/{geoHash}/forecasts/daily"
-        # print(f"BoM: ", {fc_url})
+        print(f"BoM: ", {fc_url})
         try:
             response = urequests.get(fc_url, timeout=5)
             if response.status_code != 200:
