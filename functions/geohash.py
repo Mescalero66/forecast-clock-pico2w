@@ -51,7 +51,7 @@ def decode(geohash):
     if '.' in lons: lons = lons.rstrip('0')
     return lats, lons
 
-def encode(latitude, longitude, precision=12):
+def encode(latitude, longitude, precision=7):
     """
     Encode a position given in float arguments latitude, longitude to
     a geohash which will have the character count precision.
@@ -81,7 +81,8 @@ def encode(latitude, longitude, precision=12):
         if bit < 4:
             bit += 1
         else:
-            geohash += __base32[ch]
+            # geohash += __base32[ch]
+            geohash.append(__base32[ch])
             bit = 0
             ch = 0
     return ''.join(geohash)

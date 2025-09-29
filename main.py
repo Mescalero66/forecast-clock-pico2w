@@ -36,8 +36,13 @@ DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturda
 TIMEZONE_OFFSET = 0
 GEOHASH = None
 GPS_DATA = None
-GPS_FIX = asyncio.Event()
-NEW_FORECAST = asyncio.Event()
+
+VALID_WIFI_CONNECTION = False
+VALID_GPS_FIX = False
+VALID_GPS_DATA = False
+VALID_GEOHASH_DATA = False
+VALID_LOCATION_DATA = False
+VALID_FORECAST_DATA = False
 
 C_Y = None
 C_M = None
@@ -55,9 +60,7 @@ TD_MIN = None
 TD_RAIN = None
 TD_ICON = None
 TD_TEXT = None
-
 ON_LOW = None
-
 TM_Y = None
 TM_M = None
 TM_D = None
@@ -166,57 +169,97 @@ def parse_iso8601_date(ts: str):
     return year, month, day
 
 async def check_Wifi():
+    global VALID_WIFI_CONNECTION
+    VALID_WIFI_CONNECTION = False
     if wlan.checkWiFi() == True:
+        VALID_WIFI_CONNECTION = True
         return
-    wlan.connectWiFi(retries=5, wait_per_try=20)
+    else:
+        wlan.connectWiFi(retries=3, wait_per_try=5)
+        if wlan.checkWiFi() == True:
+            VALID_WIFI_CONNECTION = True
+        else:
+            VALID_WIFI_CONNECTION = False
+            return
 
 async def get_GPS_fix():
+    global VALID_GPS_FIX
     print("get_GPS_fix()")
     if GPS_obj.has_fix:
-        GPS_FIX.set()
+        VALID_GPS_FIX = True
         return
-    if not GPS_FIX.is_set():
+    else:
+        VALID_GPS_FIX = False
         while not GPS_obj.has_fix:
             GPS_obj.get_data()
-            NoS = f"Sats:  {GPS_obj.satellites}"
-            update_8dig_disp(NoS, "r")
-            await asyncio.sleep(1)
-        GPS_FIX.set()
-    await GPS_FIX.wait()
+            print("get_GPS_fix() listens for satellites...")
+            await asyncio.sleep(0.25)
+            NoS = f"oSats {GPS_obj.satellites}°"
+            disp8.set_string(NoS, "r")
+            GPS_obj.get_data()
+            await asyncio.sleep(0.25)
+            NoS = f"°Sats {GPS_obj.satellites}o"
+            disp8.set_string(NoS, "r")
+            GPS_obj.get_data()
+            await asyncio.sleep(0.25)
+            NoS = f"oSats {GPS_obj.satellites}°"
+            GPS_obj.get_data()
+            disp8.set_string(NoS, "r")
+            await asyncio.sleep(0.25)
+            NoS = f"°Sats {GPS_obj.satellites}o"
+            disp8.set_string(NoS, "r")
+        VALID_GPS_FIX = True
     return
 
 async def get_GPS_data():
-    global GPS_DATA
+    global GPS_DATA, VALID_GPS_DATA
     print("get_GPS_data()")
-    if not GPS_FIX.is_set():
+    if not VALID_GPS_FIX:
+        VALID_GPS_DATA = False
         await get_GPS_fix()
     GPS_DATA = GPS_obj.get_data()
+    print(f"Lat: [{GPS_DATA.latitude}] Long: [{GPS_DATA.longitude}] Alt: [{GPS_DATA.altitude}]")
+    if not GPS_DATA.year == None:
+        VALID_GPS_DATA = True
     return
 
 async def update_GPS_data():
-    global GPS_DATA, GPS_FIX
+    global GPS_DATA, VALID_GPS_DATA, VALID_GPS_FIX
+    print("update_GPS_data()")
+    VALID_GPS_DATA = False
     while True:
-        print("update_GPS_data()")
-        if not GPS_FIX.is_set():
-            await GPS_FIX.wait()
+        if not VALID_GPS_FIX:
+            VALID_GPS_FIX = False
+            print("update_GPS_data() dreams of a VALID_GPS_FIX...")
+            await asyncio.sleep(15)
+            if not GPS_obj.has_fix:
+                await get_GPS_fix()
         GPS_DATA = GPS_obj.get_data()
-        await asyncio.sleep(60)
+        await asyncio.sleep(0.5)
+        if not GPS_DATA.year == None:
+            VALID_GPS_DATA = True
+        else:
+            VALID_GPS_DATA = False
 
 async def update_time_sync():
-    global GPS_FIX, TIMEZONE_OFFSET, C_Y, C_M, C_D, C_WD
+    global TIMEZONE_OFFSET, C_Y, C_M, C_D, C_WD
     while True:
         print("update_time_sync()")
-        if GPS_obj.has_fix == False:
-            GPS_FIX.clear()
-            await get_GPS_fix()
+        while not VALID_GPS_DATA:
+            print("update_time_sync() dreams of VALID_GPS_DATA...")
+            await asyncio.sleep(7)
         weekday = get_weekday(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day)
         pico_rtc.datetime((GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, weekday, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second, 0))
         TimezoneInfo.update_localtime(GPS_DATA.latitude,GPS_DATA.longitude,(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second))
         TIMEZONE_OFFSET = TimezoneInfo.tz_offset_minutes * 60
         C_Y, C_M, C_D, _, _, _, C_WD, _ = now_local()
-        await asyncio.sleep(66)
+        if TIMEZONE_OFFSET == None:
+            await asyncio.sleep(5)
+        else:
+            await asyncio.sleep(45)
 
 async def update_new_forecast_data():
+    await asyncio.sleep(10)
     while True:
         print("update_new_forecast_data()")
         now = time.time()
@@ -225,117 +268,131 @@ async def update_new_forecast_data():
             next_issue_time = "2013-10-143T10:25:00Z"
         if now > parse_iso8601_datetime(next_issue_time):
             await get_location()
-            if GEOHASH == None:
+            while not VALID_GEOHASH_DATA:
+                print("update_new_forecast_data() dreams of VALID_GEOHASH_DATA...")
+                await asyncio.sleep(5)
                 await get_location()
-            else:
-                asyncio.create_task(get_forecast())
+            asyncio.create_task(get_forecast())
         await asyncio.sleep(900)
 
 async def get_location():
-    global GEOHASH, C_LN, C_LS
-    print("get_location()")
-    if not GPS_FIX.is_set():
-        await get_GPS_fix()
-    if GPS_DATA is None:
-        await get_GPS_data()
-    GEOHASH = Geohash.encode(GPS_DATA.latitude, GPS_DATA.longitude, precision=7)
-    # print(GEOHASH)
-    if GEOHASH != BoMLocInfo.loc_current_data.loc_geohash:
-        try:
-            BoMLocInfo.update_location(GEOHASH)
-            await asyncio.sleep(2)
-            C_LN = BoMLocInfo.loc_current_data.loc_name
-            C_LS = BoMLocInfo.loc_current_data.loc_state
-            print("Location: ", C_LN)
-        except Exception as ex:
-            print(f"Location Update Failed: {ex}.")
-            await asyncio.sleep(5)
-            raise
-    return GEOHASH
+    global GEOHASH, C_LN, C_LS, VALID_GEOHASH_DATA, VALID_LOCATION_DATA
+    print(f"get_location() with geohash: [{GEOHASH}]")
+    if not GEOHASH:
+        VALID_GEOHASH_DATA = False
+    if BoMLocInfo == None:
+        VALID_LOCATION_DATA = False
+    while not VALID_GPS_DATA:
+        print("get_location() dreams of VALID_GPS_DATA...")
+        await asyncio.sleep(7)
+    try:
+        lat = float(GPS_DATA.latitude)
+        long = float(GPS_DATA.longitude)
+        newGeohash = Geohash.encode(lat, long, precision=7)
+        if not newGeohash == GEOHASH:
+            GEOHASH = newGeohash
+            VALID_GEOHASH_DATA = True
+        LocationData = BoMLocInfo.update_location(GEOHASH)
+        print(LocationData)
+        await asyncio.sleep(2)
+        if LocationData.loc_id == None:
+            print(f"Where in the world is Geohash San Diego?: {GEOHASH}")
+            VALID_LOCATION_DATA = False
+            return
+        C_LN = LocationData.loc_name
+        C_LS = LocationData.loc_state
+        VALID_LOCATION_DATA = True
+        print("Location: ", C_LN, C_LS)
+    except Exception as e:
+        print(f"Error in get_location(), location could not be got: {e}")
+        VALID_LOCATION_DATA = False
 
 async def update_clock_display():
+    while TIMEZONE_OFFSET == None:
+        print("update_clock_display() dreams of a non-zero TIMEZONE_OFFSET...")
+        await asyncio.sleep(7)
     while True:
         y, m, d, hh, mm, ss, wd, _ = now_local()
         time_str = f"{hh:02} .{mm:02} .{ss:02}"
         disp8.set_string(time_str, "r")
         await asyncio.sleep(0.2)
-        if mm == 0 or hh == 0 or ss == 0:
-            await date_check(y, m, d, wd)
         time_str = f"{hh:02} {mm:02} {ss:02}"
         disp8.set_string(time_str, "r")       
         await asyncio.sleep(0.8)
+        if ss == 0:
+            asyncio.create_task(date_check(y, m, d, wd))
 
 async def date_check(y, m, d, wd):
     global C_Y, C_M, C_D, C_WD
-    print("date_check()")
-    if (y == C_Y and m == C_M and d == C_D):
-        return
-    else:
-        C_Y = y
-        C_M = m
-        C_D = d
-        C_WD = wd
+    # print("date_check()")
+    if (y, m, d != C_Y, C_M, C_D):
+        C_Y, C_M, C_D, C_WD = y, m, d, wd
         asyncio.create_task(refresh_left_oleds())
-        return
+    return
 
 async def get_forecast():
+    global VALID_FORECAST_DATA
+    global TD_Y, TD_M, TD_M, TD_MAX, TD_MIN, TD_RAIN, TD_ICON, TD_TEXT
+    global ON_LOW
+    global TM_Y, TM_M, TM_D, TM_MAX, TM_MIN, TM_RAIN, TM_ICON, TM_TEXT
     print("get_forecast()")
-    if GEOHASH is None:
-        await get_location()
-    try:
-        fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
-        
-        global TD_Y, TD_M, TD_M, TD_MAX, TD_MIN, TD_RAIN, TD_ICON, TD_TEXT
-        global ON_LOW
-        global TM_Y, TM_M, TM_D, TM_MAX, TM_MIN, TM_RAIN, TM_ICON, TM_TEXT
-
-        TD_Y, TD_M, TD_M, _, _, _, _, _  = to_local(parse_iso8601_datetime(fc_data[0].fc_date))
-        TM_Y, TM_M, TM_D, _, _, _, _, _  = to_local(parse_iso8601_datetime(fc_data[1].fc_date))
-
-        TD_MAX = fc_data[0].fc_temp_max
-        TD_MIN = fc_data[0].fc_temp_min
-        TD_RAIN = fc_data[0].fc_rain_chance
-        TD_ICON = fc_data[0].fc_icon_descriptor
-        TD_TEXT = fc_data[0].fc_short_text
-        ON_LOW = fc_meta.fc_overnight_min
-        TM_MAX = fc_data[1].fc_temp_max
-        TM_MIN = fc_data[1].fc_temp_min
-        TM_RAIN = fc_data[1].fc_rain_chance
-        TM_ICON = fc_data[1].fc_icon_descriptor
-        TM_TEXT = fc_data[1].fc_short_text
-    except Exception as ex:
-        print(f"Forecast Update Failed: {ex}.")
-        await asyncio.sleep(5)
-        raise
+    if BoMForecastInfo.fc_metadata.fc_response_timestamp == None:
+        VALID_FORECAST_DATA = False
+    while not VALID_GEOHASH_DATA:
+        print("get_forecast() dreams of VALID_GEOHASH_DATA...")
+        await asyncio.sleep(20)
+        if not VALID_GEOHASH_DATA:
+            await get_location()
+    validText = None
+    fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
+    TD_Y, TD_M, TD_M, _, _, _, _, _  = to_local(parse_iso8601_datetime(fc_data[0].fc_date))
+    TM_Y, TM_M, TM_D, _, _, _, _, _  = to_local(parse_iso8601_datetime(fc_data[1].fc_date))
+    TD_MAX = fc_data[0].fc_temp_max
+    TD_MIN = fc_data[0].fc_temp_min
+    TD_RAIN = fc_data[0].fc_rain_chance
+    TD_ICON = fc_data[0].fc_icon_descriptor
+    TD_TEXT = fc_data[0].fc_short_text
+    validText = fc_data[0].fc_short_text 
+    ON_LOW = fc_meta.fc_overnight_min
+    TM_MAX = fc_data[1].fc_temp_max
+    TM_MIN = fc_data[1].fc_temp_min
+    TM_RAIN = fc_data[1].fc_rain_chance
+    TM_ICON = fc_data[1].fc_icon_descriptor
+    TM_TEXT = fc_data[1].fc_short_text
+    if not validText == None:
+        VALID_FORECAST_DATA = True
 
 async def update_temperature_display():
-     while True:
+    while not VALID_FORECAST_DATA:
+        print("update_temperature_display() dreams of VALID_FORECAST_DATA...")
+        await asyncio.sleep(20)
+        if not VALID_FORECAST_DATA:
+            await get_forecast()
+    while True:
         print("update_temperature_display()")
-        if TD_MAX == None:
-            try:
-                await get_forecast()
-            except Exception:
-                await asyncio.sleep(5)
-                continue
         _, _, _, hh, _, _, _, _ = now_local()
-        str_tmr = f"{TM_MAX:02}*C"
-        disp4L.show_string(str_tmr)
         if hh < 4 or hh > 17:
             str_onl = f"{ON_LOW}*C"
             disp4H.show_string(str_onl)
         else:
             str_tdy = f"{TD_MAX}*C"
             disp4H.show_string(str_tdy)
-        await asyncio.sleep(115)
+        str_tmr = f"{TM_MAX:02}*C"
+        disp4L.show_string(str_tmr)
+        await asyncio.sleep(300)
 
 async def refresh_left_oleds():
     print("refresh_left_oleds()")
-    if C_LN == None:
-        print("awaiting current location")
-        await get_location()
-    if TM_Y == None:
-        print("awaiting current forecast")
-        await get_forecast()
+
+    await asyncio.sleep(0)
+    
+    while not VALID_LOCATION_DATA or not VALID_FORECAST_DATA:
+        print("refresh_left_oleds() dreams of VALID_FORECAST_DATA and/or VALID_LOCATION_DATA")
+        await asyncio.sleep(15)
+        if not VALID_LOCATION_DATA:
+            await get_location()
+        if not VALID_FORECAST_DATA:
+            await get_forecast()
 
     str_td_dow = DAYS_OF_WEEK[C_WD % 7]
     str_tm_dow = DAYS_OF_WEEK[(C_WD + 1) % 7]
@@ -352,46 +409,75 @@ async def refresh_left_oleds():
     oledBL.custom_text(str_tm_date, y=16, font_width=16, font_height=16, scale=1, c=1)
     oledBL.custom_text(C_LN, y=48, font_width=12, font_height=12, scale=2, c=1)
 
-    print("displaying left LEDs")
+    await asyncio.sleep(0)
+
+    print("refreshing left LEDs")
     mux.select_port(OLED_ID_TL)
     oledTL.show()
     mux.select_port(OLED_ID_BL)
     oledBL.show()
 
-
 async def refresh_right_oleds():
     # do something
     test = 0
 
-async def update_8dig_disp(disp_string, alignment = "l"):
-    disp8.set_string(disp_string, alignment)
-
 async def main():
+    global tasks
+    
     # Sequential Tasks
-    await get_GPS_fix()
-    await get_GPS_data()
+    await get_GPS_fix()                                                         # get an initial GPS fix
+    await get_GPS_data()                                                        # get the initial GPS data
 
+    if not VALID_GPS_DATA:
+        await get_GPS_data()                                                    # if the GPS data didn't make it, try one more time
+    
     tasks = []
 
-    if not GPS_DATA.has_fix:
-        await get_GPS_data()
-    else:
-        tasks.append(asyncio.create_task(update_time_sync()))
+    # while not VALID_GPS_DATA:
+    #     await asyncio.sleep(1)
+    # tasks.append(asyncio.create_task(update_time_sync()))
+    # await asyncio.sleep(2)
+    # tasks.append(asyncio.create_task(update_clock_display()))
+    # await asyncio.sleep(2)
+
+    # while not VALID_GPS_FIX:
+    #     await asyncio.sleep(1)
+    # tasks.append(asyncio.create_task(update_GPS_data()))
+    # await asyncio.sleep(2)
+
+    # while not VALID_WIFI_CONNECTION:
+    #     await check_Wifi()
+    #     await asyncio.sleep(5)
+    # tasks.append(asyncio.create_task(update_new_forecast_data()))
+    # await asyncio.sleep(2)
+
+    # while not VALID_FORECAST_DATA:
+    #     await asyncio.sleep(1)
+    # tasks.append(asyncio.create_task(update_temperature_display()))
+    # await asyncio.sleep(2)
+
+    tasks.append(asyncio.create_task(update_time_sync()))
+    tasks.append(asyncio.create_task(update_clock_display()))
+    tasks.append(asyncio.create_task(update_GPS_data()))
+    tasks.append(asyncio.create_task(update_new_forecast_data()))
+    tasks.append(asyncio.create_task(update_temperature_display()))
+
+    print("ALL TASKS STARTED!")
+    while True:
         await asyncio.sleep(1)
-        tasks.append(asyncio.create_task(update_clock_display()))
-        await asyncio.sleep(2)
-        tasks.append(asyncio.create_task(update_GPS_data()))
-        await asyncio.sleep(2)
-        tasks.append(asyncio.create_task(update_new_forecast_data()))
-        await asyncio.sleep(3)
-        tasks.append(asyncio.create_task(update_temperature_display()))
+    
+try:
+    asyncio.run(main())
+except KeyboardInterrupt:
+    for t in tasks:
+        t.cancel()
+    print("HALT!")
+    disp8.clear()
+    disp4H.display_clear()
+    disp4L.display_clear()
+    asyncio.new_event_loop()
 
-    await asyncio.gather(*tasks)
-    print("Everything should be started now!")
-
-asyncio.run(main())
-
-print("this line should never be printed.")
+print("If you can read this, it's gone wrong.")
 
 # while True:
 #     gps_data = GPS_obj.get_data()

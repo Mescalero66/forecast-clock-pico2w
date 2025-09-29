@@ -1,4 +1,5 @@
 import urequests
+import asyncio
 import json
 import time
 
@@ -29,33 +30,33 @@ class BoMLocation:
     
     def parse_location_json(self, geoHash):
         loc_url = f"https://api.weather.bom.gov.au/v1/locations/{geoHash}/"
-        try:
-            response = urequests.get(loc_url, timeout=5)
-            if not hasattr(response, "status_code"):
-                print(f"Error resolving Location Data from geoHash [{geoHash}]: invalid response")
-                self.loc_valid_data = False
-                return None
-            if response.status_code == 200:
-                json_data = response.json()
-                self.loc_response_timestamp = json_data["metadata"]["response_timestamp"]
-                self.loc_current_data.loc_geohash  = json_data["data"]["geohash"]
-                self.loc_current_data.loc_timezone = json_data["data"]["timezone"]
-                self.loc_current_data.loc_latitude = json_data["data"]["latitude"]
-                self.loc_current_data.loc_longitude = json_data["data"]["longitude"]
-                self.loc_current_data.loc_id = json_data["data"]["id"]
-                self.loc_current_data.loc_name = json_data["data"]["name"]
-                self.loc_current_data.loc_state = json_data["data"]["state"]
-                response.close()
-                self.loc_valid_data = True
-                return self.loc_current_data
-            else:
-                print(f"Error: HTTP Status Code when fetching Location JSON  {response.status_code}")
-                self.loc_valid_data = False
-                return None
-        except Exception as e:
-            print(f"Error resolving Location Data from geoHash [{geoHash}]: {e}")
-            self.loc_valid_data = False
-            return None
+        # print(f"BoM: ", {loc_url})
+        for attempt in range(3):
+            try:
+                response = urequests.get(loc_url, timeout=5)
+                if not hasattr(response, "status_code"):
+                    print(f"Invalid response for {geoHash}")
+                    return None
+                if response.status_code == 200:
+                    json_data = response.json()
+                    self.loc_response_timestamp = json_data["metadata"]["response_timestamp"]
+                    self.loc_current_data.loc_geohash  = json_data["data"]["geohash"]
+                    self.loc_current_data.loc_timezone = json_data["data"]["timezone"]
+                    self.loc_current_data.loc_latitude = json_data["data"]["latitude"]
+                    self.loc_current_data.loc_longitude = json_data["data"]["longitude"]
+                    self.loc_current_data.loc_id = json_data["data"]["id"]
+                    self.loc_current_data.loc_name = json_data["data"]["name"]
+                    self.loc_current_data.loc_state = json_data["data"]["state"]
+                    response.close()
+                    self.loc_valid_data = True
+                    return self.loc_current_data
+                else:
+                    print(f"HTTP Error {response.status_code} for {geoHash}")
+                    self.loc_valid_data = False
+                    return None
+            except Exception as e:
+                print(f"Attempt {attempt+1}: error resolving {geoHash} - {e} - {repr(e)}")
+        return self.loc_current_data
 
 class ForecastMetadata:
     def __init__(self):
@@ -97,6 +98,7 @@ class BoMForecast:
     
     def parse_forecast_json(self, geoHash):
         fc_url = f"https://api.weather.bom.gov.au/v1/locations/{geoHash}/forecasts/daily"
+        # print(f"BoM: ", {fc_url})
         try:
             response = urequests.get(fc_url, timeout=5)
             if response.status_code != 200:
