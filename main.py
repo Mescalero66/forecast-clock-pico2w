@@ -254,9 +254,9 @@ async def update_time_sync(initial):
         if TIMEZONE_OFFSET == None:
             await asyncio.sleep(5)
         else:
-            await asyncio.sleep(90)
             if initial:
                 return
+            await asyncio.sleep(90)
 
 async def update_new_forecast_data():
     await asyncio.sleep(10)
