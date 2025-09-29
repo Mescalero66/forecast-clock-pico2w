@@ -196,14 +196,12 @@ async def get_GPS_fix():
             await asyncio.sleep(0.25)
             NoS = f"oSats {GPS_obj.satellites}°"
             disp8.set_string(NoS, "r")
-            GPS_obj.get_data()
             await asyncio.sleep(0.25)
             NoS = f"°Sats {GPS_obj.satellites}o"
             disp8.set_string(NoS, "r")
             GPS_obj.get_data()
             await asyncio.sleep(0.25)
             NoS = f"oSats {GPS_obj.satellites}°"
-            GPS_obj.get_data()
             disp8.set_string(NoS, "r")
             await asyncio.sleep(0.25)
             NoS = f"°Sats {GPS_obj.satellites}o"
