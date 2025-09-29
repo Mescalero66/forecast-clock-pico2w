@@ -297,7 +297,6 @@ async def get_location():
             VALID_GEOHASH_DATA = True
         print(f"GEOHASH: [{GEOHASH}]")
         LocationData = BoMLocInfo.update_location(GEOHASH)
-        print(LocationData)
         await asyncio.sleep(2)
         if LocationData.loc_id == None:
             print(f"Where in the world is Geohash San Diego?: {GEOHASH}")
