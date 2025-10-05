@@ -298,34 +298,41 @@ class SSD1306(framebuf.FrameBuffer):
                         if x_coordinate < self.width and y_coordinate < self.height:
                             self.pixel(x_coordinate, y_coordinate, c)
 
-    def custom_text(self, text, y=0, font_width = 8, font_height = 8, scale = 1, c=1):
+    def input_text(self, text, x, y, c=1, scale=1):
         text = str(text)
-        scale_x = scale * 3
-        scale_y = scale * 4
-        char_width = font_width * scale_x + 2
-        char_height = font_height * scale_y
+        font_width = 8
+        font_height = 8
+        scale_x = scale
+        scale_y = scale
+        char_spacing = 1  # optional space between characters
+        char_width = font_width * scale_x + char_spacing
 
         # Horizontal centering
         total_width = len(text) * char_width
-        x_start = (self.width - total_width) // 2
+        if x == None:
+            x_start = (self.width - total_width) // 2
+        else:
+            x_start = x
 
-        # Draw each character
         for text_index, char in enumerate(text):
+            char_code = ord(char) - 32
+            if char_code < 0 or char_code >= (len(self.font) // font_width):
+                continue  # skip unsupported chars
+
             for col in range(font_width):
-                font_byte = self.font[(ord(char) - 32) * font_width + col]
-                x_pos = x_start + text_index * char_width + col * scale_x
-                for dx in range(scale_x):                                   # horizontal scaling
-                    x = x_pos + dx
-                    if x >= self.width:
+                font_byte = self.font[char_code * font_width + col]
+                for dx in range(scale_x):
+                    x_coordinate = x_start + (text_index * char_width) + (col * scale_x) + dx
+                    if x_coordinate >= self.width:
                         continue
-                    for row in range(font_height):
-                        pixel_on = (font_byte >> row) & 1
-                        if pixel_on:
-                            y_pos = y + row * scale_y
-                            for dy in range(scale_y):                       # vertical scaling
-                                y = y_pos + dy
-                                if y < self.height:
-                                    self.pixel(x, y, c)
+
+                # Apply vertical scaling
+                for row in range(font_height):
+                    if (font_byte >> row) & 1:
+                        for dy in range(scale_y):
+                            y_coordinate = y + row * scale_y + dy
+                            if y_coordinate < self.height:
+                                self.pixel(x_coordinate, y_coordinate, c)
 
     def date_text(self, text, y_start=0, c=1):
         text = str(text)

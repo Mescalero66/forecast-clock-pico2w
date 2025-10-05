@@ -1,5 +1,6 @@
 import time
 import asyncio
+import machine
 from machine import I2C, Pin, UART, RTC
 from hardware.LED8_HT16K33 import HT16K33LED
 from hardware.GPS_PARSER import GPSReader
@@ -71,10 +72,6 @@ TM_ICON = None
 TM_TEXT = None
 
 wlan = WLAN()                                                                               # create WLAN object
-wlan.disconnectWiFi()
-networks = wlan.scanWiFi()                                                                  # scan for the WLAN
-wlan.connectWiFi()                                                                          # connect to the WLAN
-print("WiFi Connected:", wlan.checkWiFi())                                                  # and double check
 
 pico_rtc = RTC()                                                                            # create Real Time Clock
 
@@ -92,14 +89,8 @@ BoMLocInfo = BoMdata.BoMLocation()                                              
 BoMForecastInfo = BoMdata.BoMForecast()                                                     # Create the BoM Forecast data structure
 TimezoneInfo = AusTimeZones.LocalTimezone()                                                 # Create the Timezone data structure
 
-disp8.set_brightness(15)
-disp4H.display_on(0)
-disp4H.show_string("_")
-disp4L.display_on(0)
-disp4L.show_string("_")
-
-mux.select_port(OLED_ID_TL)
-oledTL = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
+mux.select_port(OLED_ID_TL)                                                                 # select the correct mux port
+oledTL = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)                                       # and create the OLED object
 mux.select_port(OLED_ID_TR)
 oledTR = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
 mux.select_port(OLED_ID_BL)
@@ -210,15 +201,21 @@ async def get_GPS_fix():
     return
 
 async def get_GPS_data():
-    global GPS_DATA, VALID_GPS_DATA
+    global GPS_DATA, VALID_GPS_DATA, GEOHASH, VALID_GEOHASH_DATA
     print("get_GPS_data()")
     if not VALID_GPS_FIX:
         VALID_GPS_DATA = False
         await get_GPS_fix()
+    GPS_obj.get_data()
     GPS_DATA = GPS_obj.get_data()
     print(f"Lat: [{GPS_DATA.latitude}] Long: [{GPS_DATA.longitude}] Alt: [{GPS_DATA.altitude}]")
+    lat = float(GPS_DATA.latitude)
+    long = float(GPS_DATA.longitude)
+    GEOHASH = Geohash.encode(lat, long, precision=7)
     if not GPS_DATA.year == None:
         VALID_GPS_DATA = True
+    if not GEOHASH == None:
+        VALID_GEOHASH_DATA = True
     return
 
 async def update_GPS_data():
@@ -240,12 +237,13 @@ async def update_GPS_data():
             VALID_GPS_DATA = False
 
 async def update_time_sync(initial):
-    global TIMEZONE_OFFSET, C_Y, C_M, C_D, C_WD
+    global GPS_DATA, TIMEZONE_OFFSET, C_Y, C_M, C_D, C_WD
     while True:
         print("update_time_sync()")
         while not VALID_GPS_DATA:
             print("update_time_sync() dreams of VALID_GPS_DATA...")
             await asyncio.sleep(7)
+        GPS_DATA = GPS_obj.get_data()
         weekday = get_weekday(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day)
         pico_rtc.datetime((GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, weekday, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second, 0))
         TimezoneInfo.update_localtime(GPS_DATA.latitude,GPS_DATA.longitude,(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second))
@@ -256,7 +254,7 @@ async def update_time_sync(initial):
         else:
             if initial:
                 return
-            await asyncio.sleep(90)
+            await asyncio.sleep(60)
 
 async def update_new_forecast_data():
     await asyncio.sleep(10)
@@ -276,26 +274,16 @@ async def update_new_forecast_data():
         await asyncio.sleep(900)
 
 async def get_location():
-    global GPS_DATA, GEOHASH, C_LN, C_LS, VALID_GEOHASH_DATA, VALID_LOCATION_DATA
+    global GPS_DATA, C_LN, C_LS, VALID_GEOHASH_DATA, VALID_LOCATION_DATA
     print(f"get_location()")
     if not GEOHASH:
-        VALID_GEOHASH_DATA = False
+        await get_GPS_data()
     if BoMLocInfo == None:
         VALID_LOCATION_DATA = False
     while not VALID_GPS_DATA:
         print("get_location() dreams of VALID_GPS_DATA...")
         await asyncio.sleep(7)
     try:
-        GPS_DATA = GPS_obj.get_data()
-        lat = float(GPS_DATA.latitude)
-        long = float(GPS_DATA.longitude)
-        print(f"Lat: [{lat}] Long: [{long}]")
-        newGeohash = Geohash.encode(lat, long, precision=7)
-        print(f"newGeohash: [{newGeohash}]")
-        if not newGeohash == GEOHASH:
-            GEOHASH = newGeohash
-            VALID_GEOHASH_DATA = True
-        print(f"GEOHASH: [{GEOHASH}]")
         LocationData = BoMLocInfo.update_location(GEOHASH)
         await asyncio.sleep(2)
         if LocationData.loc_id == None:
@@ -316,9 +304,6 @@ async def update_clock_display():
         print("update_clock_display() dreams of a non-zero TIMEZONE_OFFSET...")
         await asyncio.sleep(7)
     while True:
-        GPS_DATA = GPS_obj.get_data()
-        weekday = get_weekday(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day)
-        pico_rtc.datetime((GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, weekday, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second, 0))
         y, m, d, hh, mm, ss, wd, _ = now_local()
         time_str = f"{hh:02} .{mm:02} .{ss:02}"
         disp8.set_string(time_str, "r")
@@ -386,7 +371,6 @@ async def update_temperature_display():
 
 async def refresh_left_oleds():
     print("refresh_left_oleds()")
-
     await asyncio.sleep(0)
 
     while not VALID_LOCATION_DATA or not VALID_FORECAST_DATA:
@@ -421,70 +405,118 @@ async def refresh_right_oleds():
     test = 0
 
 async def main():
-    global tasks
-    
-    # Sequential Tasks
-    await get_GPS_fix()                                                         # get an initial GPS fix
-    await get_GPS_data()                                                        # get the initial GPS data
+    await check_Wifi()
+    time.sleep(1)
+    await get_GPS_fix()                                                               # get an initial GPS fix
+    time.sleep(3)
+    await get_GPS_data()                                                              # populate the initial GPS data
+    time.sleep(3)
+
+    oledBL.fill(0)
+    text = "Getting GPS data......"
+    oledBL.text(text, x=1, y=16, c=1)
+    print("GPS Year: ", GPS_DATA.year)
+    mux.select_port(OLED_ID_BL)
+    oledBL.show()
 
     if not VALID_GPS_DATA:
         await get_GPS_data()                                                    # if the GPS data didn't make it, try one more time
     
+    time.sleep(2)
+
+    oledBL.fill(0)
+    oledBL.text("GPS data is valid.", x=1, y=16, c=1)
+    oledBL.text("Synchronising time zone......", x=1, y=32, c=1)
+    mux.select_port(OLED_ID_BL)
+    oledBL.show()
+
+    time.sleep(2)
+
     await update_time_sync(initial=True)
+    time.sleep(3)
+    print("Timezone Offset: ", TIMEZONE_OFFSET)
+
+    oledBL.fill(0)
+    oledBL.text("GPS data is valid.", x=1, y=16, c=1)
+    oledBL.text("Timezone set.", x=1, y=32, c=1)
+    oledBL.text("Getting location data......", x=1, y=48, c=1)
+    mux.select_port(OLED_ID_BL)
+    oledBL.show()
+
     await get_location()
+    time.sleep(3)
+    print("geoHash: ", GEOHASH)
+    print("Location: ", C_LN, " [", C_LS,"]")
+    
+    oledBL.fill(0)
+    vG = f"geoHash Valid: {GEOHASH}"
+    vL = f"Location: {C_LN} [{C_LS}]"
+    oledBL.text(vG, x=1, y=16, c=1)
+    oledBL.text(vL, x=1, y=32, c=1)
+    oledBL.text("Getting forecast for location.......", x=1, y=48, c=1)
+    mux.select_port(OLED_ID_BL)
+    oledBL.show()
+    
     await get_forecast()
+    time.sleep(3)
+    vF = f"Forecast: {TD_D:02} / {TD_M:02} / {TD_Y:04}"
+    print("Forecast Date: ", vF)
+    
+    oledBL.fill(0)
+    vG = f"geoHash Valid: {GEOHASH}"
+    vL = f"Location: {C_LN} [{C_LS}]"
+    vF = f"Forecast: {TD_D:02} / {TD_M:02} / {TD_Y:04}"
+    oledBL.text(vG, x=1, y=16, c=1)
+    oledBL.text(vL, x=1, y=32, c=1)
+    oledBL.text(vF, x=1, y=48, c=1)
+    mux.select_port(OLED_ID_BL)
+    oledBL.show()
 
     tasks = []
 
     tasks.append(asyncio.create_task(update_clock_display()))
-    await asyncio.sleep(1)
     tasks.append(asyncio.create_task(update_temperature_display()))
-    await asyncio.sleep(1)
-
     tasks.append(asyncio.create_task(update_time_sync()))
-    await asyncio.sleep(1)
     tasks.append(asyncio.create_task(update_new_forecast_data()))
-    await asyncio.sleep(1)
 
     # tasks.append(asyncio.create_task(update_GPS_data()))
-
     print("ALL TASKS STARTED!")
-    while True:
-        await asyncio.sleep(1)
 
-    # while not VALID_GPS_DATA:
-    #     await asyncio.sleep(1)
-    # tasks.append(asyncio.create_task(update_time_sync()))
-    # await asyncio.sleep(2)
-    # tasks.append(asyncio.create_task(update_clock_display()))
-    # await asyncio.sleep(2)
+#wlan.disconnectWiFi()
+networks = wlan.scanWiFi()                                                                  # scan for the WLAN
+wlan.connectWiFi()                                                                          # connect to the WLAN
+print("WiFi Connected:", wlan.checkWiFi())                                                  # and double check
 
-    # while not VALID_GPS_FIX:
-    #     await asyncio.sleep(1)
-    # tasks.append(asyncio.create_task(update_GPS_data()))
-    # await asyncio.sleep(2)
+disp8.set_brightness(15)                                    # TURN ON THE 8 DIGIT DISPLAY WITH MAX BRIGHTNESS
+disp4H.display_on(0)                                        # TURN ON THE UPPER 4 DIGIT DISPLAY WITH MAX BRIGHTNESS
+disp4H.show_string("_")                                     # display underscore placeholder
+disp4L.display_on(0)                                        # TURN ON THE LOWER 4 DIGIT DISPLAY WITH MAX BRIGHTNESS
+disp4L.show_string("_")                                     # display underscore placeholder
 
-    # while not VALID_WIFI_CONNECTION:
-    #     await check_Wifi()
-    #     await asyncio.sleep(5)
-    # tasks.append(asyncio.create_task(update_new_forecast_data()))
-    # await asyncio.sleep(2)
+mux.select_port(OLED_ID_TL)                                                                 # select the correct mux port
+oledTL.subbanner_text("TL",64,32,1)                                                               # display placeholder
+oledTL.show()
+mux.select_port(OLED_ID_TR)
+oledTR.date_text("TR",16,1)                                                               # display placeholder
+oledTR.show()
+mux.select_port(OLED_ID_BL)
+oledBL.date_text("BL",16,1)                                                                    # display placeholder
+oledBL.show()
+mux.select_port(OLED_ID_BR)
+oledBR.year_text("BR")                                                    # display placeholder
+oledBR.show()
 
-    # while not VALID_FORECAST_DATA:
-    #     await asyncio.sleep(1)
-    # tasks.append(asyncio.create_task(update_temperature_display()))
-    # await asyncio.sleep(2)    
-    
-try:
-    asyncio.run(main())
-except KeyboardInterrupt:
-    for t in tasks:
-        t.cancel()
-    print("HALT!")
-    disp8.clear()
-    disp4H.display_clear()
-    disp4L.display_clear()
-    asyncio.new_event_loop()
+asyncio.run(main())                                                   # start the main thing
+
+# try:
+#     main()
+# except Exception as e:
+#     print("Error in main loop. Pico will reboot!")
+#     print(e)
+#     time.sleep(5)
+#     print("Pico will reboot!")
+#     time.sleep(3)
+#     #machine.reset()
 
 print("If you can read this, it's gone wrong.")
 
