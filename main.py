@@ -332,7 +332,7 @@ async def get_forecast():
         VALID_FORECAST_DATA = False
     while not VALID_GEOHASH_DATA:
         print("get_forecast() dreams of VALID_GEOHASH_DATA...")
-        await asyncio.sleep(20)
+        await asyncio.sleep(24)
     validText = None
     fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
     TD_Y, TD_M, TD_M, _, _, _, _, _  = to_local(parse_iso8601_datetime(fc_data[0].fc_date))
