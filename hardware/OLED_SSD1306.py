@@ -259,9 +259,9 @@ class SSD1306(framebuf.FrameBuffer):
                                 self.pixel(x_coord, y_coordinate - iY, c)
                                 self.pixel(x_coord - 1, y_coordinate - iY, c)
     
-    def banner_text_inverted(self, text, c=0):
+    def banner_text_inverted(self, text, c=0, scale=14):
         text = str(text)
-        total_width = len(text) * 14  # 14 pixels per char horizontally
+        total_width = len(text) * scale  # 14 pixels per char horizontally
         x_start = (self.width - total_width) // 2  # center
         y = 2
 
@@ -272,16 +272,18 @@ class SSD1306(framebuf.FrameBuffer):
                 fontDataPixelValues = self.font[(ord(text[text_index]) - 32) * 8 + col]
                 for i in range(8):
                     if fontDataPixelValues & 1 << i != 0:
-                        x_coord = x_start + (col * 2) + (text_index * 14)
+                        x_coord = x_start + (col * 2) + (text_index * scale)
                         y_coordinate = y + (i * 2)
                         if x_coord < self.width and y_coordinate < self.height:
                             for iY in range(2):
                                 self.pixel(x_coord, y_coordinate - iY, c)
                                 self.pixel(x_coord - 1, y_coordinate - iY, c)
                 
-    def subbanner_text(self, text, x, y, c=1):
+    def subbanner_text(self, text, x=None, y=None, char_width=8, c=1):
         text = str(text)
-        total_width = len(text) * 8
+        total_width = len(text) * char_width
+        y = 2
+
         if x is None:
             x = (self.width - total_width) // 2
 
@@ -291,57 +293,51 @@ class SSD1306(framebuf.FrameBuffer):
         for text_index in range(len(text)):
             for col in range(8):
                 fontDataPixelValues = self.font[(ord(text[text_index]) - 32) * 8 + col]
-                for i in range(7):
-                    if fontDataPixelValues & (1 << i) != 0:
-                        x_coordinate = x + col + text_index * 8
-                        y_coordinate = y + i
-                        if x_coordinate < self.width and y_coordinate < self.height:
-                            self.pixel(x_coordinate, y_coordinate, c)
+                for i in range(8):
+                    if fontDataPixelValues & 1 << i != 0:
+                        x_coord = x + (col * 2) + (text_index * char_width)
+                        y_coordinate = y + (i * 2)
+                        if x_coord < self.width and y_coordinate < self.height:
+                            self.pixel(x_coord, y_coordinate, c)
 
-    def input_text(self, text, x, y, c=1, scale=1):
+    def input_text(self, text, x_start=None, y_start=0, x_scale=2, y_scale=3, c=1):
         text = str(text)
         font_width = 8
         font_height = 8
-        scale_x = scale
-        scale_y = scale
-        char_spacing = 1  # optional space between characters
-        char_width = font_width * scale_x + char_spacing
+        char_width = font_width * x_scale + 1   # 8 * 2 + 2 spacing = 18 (approx)
+        char_height = font_height * y_scale     # 16 pixels high
 
         # Horizontal centering
         total_width = len(text) * char_width
-        if x == None:
+        if x_start is None:
             x_start = (self.width - total_width) // 2
-        else:
-            x_start = x
 
+        # Draw each character
         for text_index, char in enumerate(text):
-            char_code = ord(char) - 32
-            if char_code < 0 or char_code >= (len(self.font) // font_width):
-                continue  # skip unsupported chars
-
             for col in range(font_width):
-                font_byte = self.font[char_code * font_width + col]
-                for dx in range(scale_x):
-                    x_coordinate = x_start + (text_index * char_width) + (col * scale_x) + dx
-                    if x_coordinate >= self.width:
+                font_byte = self.font[(ord(char) - 32) * font_width + col]
+                x_pos = x_start + text_index * char_width + col * x_scale
+                for dx in range(x_scale):                                   # horizontal scaling
+                    x = x_pos + dx
+                    if x >= self.width:
                         continue
-
-                # Apply vertical scaling
-                for row in range(font_height):
-                    if (font_byte >> row) & 1:
-                        for dy in range(scale_y):
-                            y_coordinate = y + row * scale_y + dy
-                            if y_coordinate < self.height:
-                                self.pixel(x_coordinate, y_coordinate, c)
+                    for row in range(font_height):
+                        pixel_on = (font_byte >> row) & 1
+                        if pixel_on:
+                            y_pos = y_start + row * y_scale
+                            for dy in range(y_scale):                       # vertical scaling
+                                y = y_pos + dy
+                                if y < self.height:
+                                    self.pixel(x, y, c)
 
     def date_text(self, text, y_start=0, c=1):
         text = str(text)
         font_width = 8                          # font is 8 pixels wide
         font_height = 8                         # font is 8 pixels tall
-        scale_x = 3                             # horizontal scaling
-        scale_y = 4                             # vertical scaling
+        scale_x = 2                             # horizontal scaling
+        scale_y = 3                             # vertical scaling
         y_offset = 16                           # start under the banner
-        char_width = font_width * scale_x + 2   # 8 * 2 + 2 spacing = 18 (approx)
+        char_width = font_width * scale_x       # 8 * 2 + 2 spacing = 18 (approx)
         char_height = font_height * scale_y     # 16 pixels high
 
         # Horizontal centering
