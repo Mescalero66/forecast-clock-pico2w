@@ -6,6 +6,7 @@
 from micropython import const
 from struct import pack_into
 import framebuf
+import os
 
 # register definitions
 SET_CONTRAST = const(0x81)
@@ -198,7 +199,7 @@ class SSD1306(framebuf.FrameBuffer):
         for i in range(y, y + h):
             self.hline(x, i, w, c)
         
-    def load_font(self, filename="font-pet-me-128.dat"):
+    def load_font(self, filename="graphics/font-pet-me-128.dat"):
         with open(filename, "rb") as f:
             self.font = bytearray(f.read())
 
@@ -300,12 +301,12 @@ class SSD1306(framebuf.FrameBuffer):
                         if x_coord < self.width and y_coordinate < self.height:
                             self.pixel(x_coord, y_coordinate, c)
 
-    def input_text(self, text, x_start=None, y_start=0, x_scale=2, y_scale=3, c=1):
+    def input_text(self, text, x_start=None, y_start=0, x_scale=2, y_scale=3, spacer=0, c=1, banner=False):
         text = str(text)
         font_width = 8
         font_height = 8
-        char_width = font_width * x_scale + 1   # 8 * 2 + 2 spacing = 18 (approx)
-        char_height = font_height * y_scale     # 16 pixels high
+        char_width = font_width * x_scale + spacer
+        char_height = font_height * y_scale
 
         # Horizontal centering
         total_width = len(text) * char_width
@@ -317,18 +318,24 @@ class SSD1306(framebuf.FrameBuffer):
             for col in range(font_width):
                 font_byte = self.font[(ord(char) - 32) * font_width + col]
                 x_pos = x_start + text_index * char_width + col * x_scale
-                for dx in range(x_scale):                                   # horizontal scaling
+                for dx in range(x_scale):
                     x = x_pos + dx
                     if x >= self.width:
                         continue
                     for row in range(font_height):
                         pixel_on = (font_byte >> row) & 1
-                        if pixel_on:
-                            y_pos = y_start + row * y_scale
-                            for dy in range(y_scale):                       # vertical scaling
-                                y = y_pos + dy
-                                if y < self.height:
+                        y_pos = y_start + row * y_scale
+                        for dy in range(y_scale):
+                            y = y_pos + dy
+                            if y >= self.height:
+                                continue
+                            # Banner mode: text pixels off, background pixels on
+                            if banner:
+                                self.pixel(x, y, 0 if pixel_on else c)
+                            else:
+                                if pixel_on:
                                     self.pixel(x, y, c)
+
 
     def date_text(self, text, y_start=0, c=1):
         text = str(text)
@@ -365,6 +372,46 @@ class SSD1306(framebuf.FrameBuffer):
                                 if y < self.height:
                                     self.pixel(x, y, c)
     
+    def display_pbm(self, name, x_offset=0, y_offset=0, size=47, c=1):
+        pbm_path = f"graphics/{name}_{size}.pbm"
+
+        try:
+            with open(pbm_path, "r") as f:
+                lines = f.readlines()
+        except OSError:
+            print("PBM file not found:", pbm_path)
+            return
+
+        # Strip whitespace and skip empty lines
+        lines = [l.strip() for l in lines if l.strip()]
+
+        # Check header
+        if lines[0] != 'P1':
+            raise ValueError("Only ASCII PBM (P1) supported")
+
+        # Find first line with width and height (skip comments or extra text)
+        for i, line in enumerate(lines[1:], start=1):
+            if all(c.isdigit() or c.isspace() for c in line):
+                width, height = map(int, line.split())
+                pixel_lines = lines[i+1:]  # all lines after dimensions
+                break
+        else:
+            raise ValueError("Could not find PBM dimensions")
+
+        # Keep only lines containing 0 and 1
+        pixel_lines = [l for l in pixel_lines if set(l.strip()).issubset({'0','1'})]
+
+        # Combine into a single list of pixels
+        pixels = ''.join(pixel_lines)
+        if len(pixels) != width * height:
+            raise ValueError(f"PBM pixel data does not match width*height ({len(pixels)} != {width*height})")
+
+        # Draw pixels
+        for y in range(height):
+            for x in range(width):
+                if pixels[y*width + x] == '1':
+                    self.pixel(x + x_offset, y + y_offset, c)
+
     def show(self):
         # x0 = 0
         # x1 = self.width - 1

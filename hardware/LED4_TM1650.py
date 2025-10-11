@@ -61,7 +61,7 @@ characterBytes = [
     0x08,  # [40] underscore _
     0x58,  # [41] lowercase 'c' normal
     0x61,  # [42] lowercase 'c' upper
-    0x00,  # [43] reserved
+    0x01,  # [43] tilde for top segment only
     0x00,  # [44] reserved
     0x00   # [45] reserved
 ]
@@ -378,6 +378,8 @@ class LED4digdisp:
             return 42
         if c == "*":        # degree symbol
             return 38
+        if c == "~":        # top segment
+            return 43
 
         # Digits 0–9
         if "0" <= c <= "9":

@@ -194,14 +194,33 @@ class LocalTimezone:
                 # If UTC date is between Jan and Mar, the relevant DST season started last year.
                 # We’ll compute both candidate seasons and test.
 
-        def utc_transition_times(year):
-            # Start of DST in local standard time (year Oct)
-            s_loc = (year, 10, first_sunday_on_or_after(year,10,1)[2], 2, 0, 0)
-            s_utc = add_minutes(s_loc, -base_offset)
-            # End of DST in local daylight time (next year Apr)
-            e_year = year + 1
-            e_loc = (e_year, 4, first_sunday_on_or_after(e_year,4,1)[2], 3, 0, 0)
-            e_utc = add_minutes(e_loc, -(base_offset + dst_add))
+        def utc_transition_times(utc_year):
+            # # Start of DST in local standard time (year Oct)
+            # s_loc = (year, 10, first_sunday_on_or_after(year,10,1)[2], 2, 0, 0)
+            # s_utc = add_minutes(s_loc, -base_offset)
+            # # End of DST in local daylight time (next year Apr)
+            # e_year = year + 1
+            # e_loc = (e_year, 4, first_sunday_on_or_after(e_year,4,1)[2], 3, 0, 0)
+            # e_utc = add_minutes(e_loc, -(base_offset + dst_add))
+            # return s_utc, e_utc
+            
+            if utc_month := utc_dt[1] >= 7:
+                # Current date after July → season is Oct this year → Apr next year
+                season_start_year = utc_year
+                season_end_year = utc_year + 1
+            else:
+                # Current date before July → season is Oct last year → Apr this year
+                season_start_year = utc_year - 1
+                season_end_year = utc_year
+
+            # DST start: first Sunday Oct, 02:00 standard time
+            s_year, s_month, s_day = first_sunday_on_or_after(season_start_year, 10, 1)
+            s_utc = add_minutes((s_year, s_month, s_day, 2, 0, 0), -base_offset)
+
+            # DST end: first Sunday Apr, 03:00 daylight time
+            e_year, e_month, e_day = first_sunday_on_or_after(season_end_year, 4, 1)
+            e_utc = add_minutes((e_year, e_month, e_day, 3, 0, 0), -(base_offset + dst_add))
+
             return s_utc, e_utc
 
         # Determine which season bracket to check

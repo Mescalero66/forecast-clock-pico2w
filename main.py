@@ -35,7 +35,7 @@ OLED_ID_BR = 1
 DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 MONTHS_OF_YEAR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-TIMEZONE_OFFSET = 0
+TIMEZONE_OFFSET = None
 GEOHASH = None
 GPS_DATA = None
 
@@ -176,7 +176,7 @@ async def check_Wifi():
     return
 
 async def get_GPS_fix():
-    global VALID_GPS_FIX
+    global VALID_GPS_FIX, GPS_DATA
     print("get_GPS_fix()")
     if GPS_obj.has_fix:
         VALID_GPS_FIX = True
@@ -184,33 +184,129 @@ async def get_GPS_fix():
     else:
         VALID_GPS_FIX = False
         while not GPS_obj.has_fix:
-            GPS_obj.get_data()
+            GPS_DATA = GPS_obj.get_data()
+            NoS = f"-Sats {GPS_obj.satellites}-"
+            disp4H.show_string("    ")
+            disp4L.show_string("    ") 
+            disp8.set_string(NoS, "r")
+            await asyncio.sleep(0.1)
             print("get_GPS_fix() listens for satellites...")
-            NoS = f"oSats {GPS_obj.satellites}°"
-            disp8.set_string(NoS, "r")
-            await asyncio.sleep(0.25)
+            disp4H.show_string(" _  ")
+            await asyncio.sleep(0.1)
+            disp4H.show_string("  _ ")
+            await asyncio.sleep(0.1)
+            disp4H.show_string("    ")
+            disp4L.show_string("  ~ ")
+            await asyncio.sleep(0.1)
+            disp4L.show_string(" ~  ")
+            await asyncio.sleep(0.1)
+            disp4L.show_string("~   ")
+            await asyncio.sleep(0.1)
             NoS = f"-Sats {GPS_obj.satellites}-"
             disp8.set_string(NoS, "r")
-            await asyncio.sleep(0.25)
-            NoS = f"°Sats {GPS_obj.satellites}o"
-            disp8.set_string(NoS, "r")
-            await asyncio.sleep(0.25)
+            disp4L.show_string("    ")
+            disp4H.show_string("_   ") 
+            await asyncio.sleep(0.1)
+            disp4H.show_string("-   ") 
+            await asyncio.sleep(0.1)
+            disp4H.show_string(" -  ") 
+            await asyncio.sleep(0.1)
+            disp4H.show_string("  - ") 
+            await asyncio.sleep(0.1)
+            disp4H.show_string("   -") 
+            await asyncio.sleep(0.1)
+            disp4H.show_string("   _") 
+            await asyncio.sleep(0.1)
+            disp4H.show_string("    ")
+            disp4L.show_string("   ~") 
+            await asyncio.sleep(0.1)
+            disp4L.show_string("   -") 
+            await asyncio.sleep(0.1)
             NoS = f"-Sats {GPS_obj.satellites}-"
             disp8.set_string(NoS, "r")
-            await asyncio.sleep(0.25)
+            disp4L.show_string("  - ")
+            await asyncio.sleep(0.1)
+            disp4L.show_string(" -  ")
+            await asyncio.sleep(0.1) 
+            disp4L.show_string("-   ")
+            await asyncio.sleep(0.1)
+            disp4L.show_string("~   ")
+            await asyncio.sleep(0.1)
+            NoS = f"-Sats {GPS_obj.satellites}-"
+            disp8.set_string(NoS, "r")
+            disp4L.show_string("    ")
+            disp4H.show_string("_   ")
+            await asyncio.sleep(0.1)
+            disp4H.show_string("-   ")
+            await asyncio.sleep(0.1)
+            disp4H.show_string("~   ")
+            await asyncio.sleep(0.1)
+            disp4H.show_string(" ~  ")
+            await asyncio.sleep(0.1)
+            disp4H.show_string("  ~ ")
+            await asyncio.sleep(0.1)
+            disp4H.show_string("   ~")
+            await asyncio.sleep(0.1)
+            disp4H.show_string("   -")
+            await asyncio.sleep(0.1)
+            disp4H.show_string("   _")
+            await asyncio.sleep(0.1)
+            NoS = f"-Sats {GPS_obj.satellites}-"
+            disp8.set_string(NoS, "r")
+            disp4H.show_string("    ")
+            disp4L.show_string("   ~")
+            await asyncio.sleep(0.1)
+            disp4L.show_string("   -")
+            await asyncio.sleep(0.1)
+            disp4L.show_string("   _")
+            await asyncio.sleep(0.1)
+            disp4L.show_string("  _ ")
+            await asyncio.sleep(0.1)
+            disp4L.show_string(" _  ")
+            await asyncio.sleep(0.1)
+            disp4L.show_string("_   ")
+            await asyncio.sleep(0.1)
+        GPS_DATA = GPS_obj.get_data()
         VALID_GPS_FIX = True
     return
 
 async def get_GPS_data():
-    global GPS_DATA, VALID_GPS_DATA, GEOHASH
+    global GPS_DATA, VALID_GPS_DATA, GEOHASH, TIMEZONE_OFFSET, C_Y, C_M, C_D, C_WD
+    # this now does everything, as the catch-all initial populating of required variables
     print("get_GPS_data()")
     if not VALID_GPS_FIX:
         VALID_GPS_DATA = False
+        print("get_GPS_data() awaits a GPS fix.....")
         await get_GPS_fix()
-    GPS_obj.get_data()
+    
+    # get the data
     GPS_DATA = GPS_obj.get_data()
     print(f"Lat: [{GPS_DATA.latitude}] Long: [{GPS_DATA.longitude}] Alt: [{GPS_DATA.altitude}]")
+
+    # this is the showstopper for getting a valid initial set of data:
+    while GPS_DATA.latitude == None or GPS_DATA.longitude == None or GPS_DATA.latitude == 0.0 or GPS_DATA.longitude == 0.0:
+        await asyncio.sleep(1)
+        GPS_DATA = GPS_obj.get_data()
+        print(f"Lat: [{GPS_DATA.latitude}] Long: [{GPS_DATA.longitude}] Alt: [{GPS_DATA.altitude}]")
+        
+    # get and set the geohash
+    GPS_DATA = GPS_obj.get_data()
     GEOHASH = Geohash.encode(float(GPS_DATA.latitude), float(GPS_DATA.longitude), precision=7)
+    
+    # get and set the pico's internal clock [UTC]
+    weekday = get_weekday(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day)
+    pico_rtc.datetime((GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, weekday, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second, 0))
+    
+    # get and set the timezone offset
+    GPS_DATA = GPS_obj.get_data()
+    print(f"Y{GPS_DATA.year} M{GPS_DATA.month} D{GPS_DATA.day} H{GPS_DATA.hour} M{GPS_DATA.minute} S{GPS_DATA.second}")
+    TimezoneInfo.update_localtime(GPS_DATA.latitude,GPS_DATA.longitude,(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second))
+    TIMEZONE_OFFSET = TimezoneInfo.tz_offset_minutes * 60
+    
+    # get and set the local date
+    C_Y, C_M, C_D, _, _, _, C_WD, _ = now_local()
+    print(f"LY{C_Y} LM{C_M} LD{C_D} LWD{C_WD}")
+    
     if not GPS_DATA.year == None:
         VALID_GPS_DATA = True
     return
@@ -242,12 +338,12 @@ async def update_time_sync():
             GPS_DATA = GPS_obj.get_data()
             weekday = get_weekday(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day)
             pico_rtc.datetime((GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, weekday, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second, 0))
-            C_Y, C_M, C_D, _, _, _, C_WD, _ = now_local()
-            print("update_time_sync() has re-calculated the TIME.")
             if TIMEZONE_OFFSET == None:
                 TimezoneInfo.update_localtime(GPS_DATA.latitude,GPS_DATA.longitude,(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second))
                 TIMEZONE_OFFSET = TimezoneInfo.tz_offset_minutes * 60
-                print("update_time_sync() has re-calculated the TIMEZONE_OFFSET.")           
+                print("update_time_sync() has re-calculated the TIMEZONE_OFFSET.")         
+            C_Y, C_M, C_D, _, _, _, C_WD, _ = now_local()
+            print("update_time_sync() has re-calculated the TIME.")  
         await asyncio.sleep(900)
 
 async def update_new_forecast_data():
@@ -311,7 +407,7 @@ async def date_check(y, m, d, wd):
 
 async def get_forecast():
     global VALID_FORECAST_DATA, REQUIRE_REFRESH
-    global TD_Y, TD_M, TD_M, TD_MAX, TD_MIN, TD_RAIN, TD_ICON, TD_TEXT
+    global TD_Y, TD_M, TD_D, TD_MAX, TD_MIN, TD_RAIN, TD_ICON, TD_TEXT
     global ON_LOW
     global TM_Y, TM_M, TM_D, TM_MAX, TM_MIN, TM_RAIN, TM_ICON, TM_TEXT
     print("get_forecast()")
@@ -324,8 +420,10 @@ async def get_forecast():
     else:
         validText = None
         fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
-        TD_Y, TD_M, TD_M, _, _, _, _, _  = to_local(parse_iso8601_datetime(fc_data[0].fc_date))
+        TD_Y, TD_M, TD_D, _, _, _, _, _  = to_local(parse_iso8601_datetime(fc_data[0].fc_date))
+        
         TM_Y, TM_M, TM_D, _, _, _, _, _  = to_local(parse_iso8601_datetime(fc_data[1].fc_date))
+        
         TD_MAX = fc_data[0].fc_temp_max
         TD_MIN = fc_data[0].fc_temp_min
         TD_RAIN = fc_data[0].fc_rain_chance
@@ -338,6 +436,8 @@ async def get_forecast():
         TM_RAIN = fc_data[1].fc_rain_chance
         TM_ICON = fc_data[1].fc_icon_descriptor
         TM_TEXT = fc_data[1].fc_short_text
+        print(f"TD: {TD_Y}{TD_M}{TD_D} Max:{TD_MAX} Min:{TD_MIN} {TD_TEXT}")
+        print(f"TM: {TM_Y}{TM_M}{TM_D} Max:{TM_MAX} Min:{TM_MIN} {TM_TEXT}")
         if not validText == None:
             VALID_FORECAST_DATA = True
             REQUIRE_REFRESH = True
@@ -437,7 +537,7 @@ async def main():
 
     await get_forecast()
     time.sleep(3)
-    vF = f"Forecast: {TD_D:02} / {TD_M:02} / {TD_Y:04}"
+    vF = f"Forecast: {TD_D:02}/{TD_M:02}/{TD_Y:04}"
     print("Forecast Date: ", vF)
     
     asyncio.create_task(update_time_sync())
@@ -472,59 +572,79 @@ disp4L.show_string("o*o*")                                      # display unders
 
 
 # NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION
-C_WD = 2
-C_D = 7
-C_M = 10
-C_Y = 2025
-TM_D = 8
-TM_Y = 2025
-TD_M = 5
-TM_M = 6
-C_LN = "Huntingdale"
-C_LS = "Vic"
+# C_WD = 2
+# TD_D = 7
+# TD_M = 10
+# TD_Y = 2025
+# TM_D = 8
+# TM_Y = 2025
+# TD_M = 5
+# TM_M = 6
+# C_LN = "Huntingdale"
+# C_LS = "Vic"
+# TD_MAX = 21
+# TD_MIN = 10
+# TD_RAIN = 90
+# TD_ICON = "shower"
+# TD_TEXT = "Shower or two."
+# ON_LOW = 10
+# TM_MAX = 20
+# TM_MIN = 10
+# TM_RAIN = 95
+# TM_ICON = "shower"
+# TM_TEXT = "Showers increasing."
 
-str_td_dow = DAYS_OF_WEEK[C_WD % 7]
-str_tm_dow = DAYS_OF_WEEK[(C_WD + 1) % 7]
+# str_td_dow = DAYS_OF_WEEK[C_WD % 7]
+# str_tm_dow = DAYS_OF_WEEK[(C_WD + 1) % 7]
 
-# get the months of the year
-str_td_moy = MONTHS_OF_YEAR[TD_M]
-str_tm_moy = MONTHS_OF_YEAR[TM_M]
+# # get the months of the year
+# str_td_moy = MONTHS_OF_YEAR[TD_M]
+# str_tm_moy = MONTHS_OF_YEAR[TM_M]
 
-oledTL.fill(0)
-oledBL.fill(0)
-oledTR.fill(0)
-oledBR.fill(0)
+# oledTL.fill(0)
+# oledBL.fill(0)
+# oledTR.fill(0)
+# oledBR.fill(0)
 
-# top left
-oledTL.banner_text_inverted(str_td_dow, scale=14)
-str_td_date = f"{C_D:02} {str_td_moy}"
-str_td_yy = f"{C_Y:04}"
-oledTL.input_text(str_td_date, y_start=20, x_scale=2, y_scale=4)
-oledTL.input_text(str_td_yy, y_start=55, x_scale=1, y_scale=1)
+# # top left
+# oledTL.banner_text_inverted(str_td_dow, scale=14)
+# str_td_date = f"{TD_D:02} {str_td_moy}"
+# str_td_yy = f"{TD_Y:04}"
+# oledTL.input_text(str_td_date, y_start=21, x_scale=2, y_scale=3)
+# oledTL.input_text(str_td_yy, y_start=49, x_scale=2, y_scale=2)
 
-# bottom left
-oledBL.banner_text_inverted(str_tm_dow, scale=14)
-str_tm_date = f"{TM_D:02} {str_tm_moy}"
-str_tm_yy = f"{TM_Y:04}"
-oledBL.input_text(str_tm_date, y_start=20, x_scale=2, y_scale=4)
-oledBL.input_text(str_tm_yy, y_start=55, x_scale=1, y_scale=1)
+# # bottom left
+# oledBL.banner_text_inverted(str_tm_dow, scale=14)
+# str_tm_date = f"{TM_D:02} {str_tm_moy}"
+# str_tm_yy = f"{TM_Y:04}"
+# oledBL.input_text(str_tm_date, y_start=21, x_scale=2, y_scale=3)
+# oledBL.input_text(str_tm_yy, y_start=49, x_scale=2, y_scale=2)
 
-# top right
-oledTR.banner_text_inverted(C_LN, scale=11)
+# # top right
+# oledTR.banner_text_inverted(C_LN, scale=11)
+# str_rain_percent = f"{TD_RAIN:0}%"
+# oledTR.input_text(str_rain_percent, x_start=80, y_start=20, x_scale=2, y_scale=2)
+# TD_ICON = "clear"
+# oledTR.display_pbm(TD_ICON, x_offset=0, y_offset=17, size=47)
+# oledTR.input_text(TD_TEXT, y_start=55, x_scale=1, spacer=0, y_scale=1)
 
-# bottom right
-oledBR.banner_text_inverted(C_LN, scale=11)
+# # bottom right
+# oledBR.banner_text_inverted(C_LN, scale=11)
+# str_rain_percent = f"{TM_RAIN:0}%"
+# oledBR.input_text(str_rain_percent, x_start=80, y_start=20, x_scale=2, y_scale=2)
+# TM_ICON = "partly_cloudy"
+# oledBR.display_pbm(TM_ICON, x_offset=0, y_offset=17, size=38)
+# oledBR.input_text(TM_TEXT, y_start=56, x_scale=1, spacer=-1, y_scale=1)
 
-
-print("refreshing OLEDs")
-mux.select_port(OLED_ID_TL)
-oledTL.show()
-mux.select_port(OLED_ID_BL)
-oledBL.show()
-mux.select_port(OLED_ID_TR)
-oledTR.show()
-mux.select_port(OLED_ID_BR)
-oledBR.show()
+# print("refreshing OLEDs")
+# mux.select_port(OLED_ID_TL)
+# oledTL.show()
+# mux.select_port(OLED_ID_BL)
+# oledBL.show()
+# mux.select_port(OLED_ID_TR)
+# oledTR.show()
+# mux.select_port(OLED_ID_BR)
+# oledBR.show()
 # NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION
 
 #wlan.disconnectWiFi()
