@@ -2,15 +2,18 @@ import time
 import asyncio
 import machine
 from machine import I2C, Pin, UART, RTC
+
 from hardware.LED8_HT16K33 import HT16K33LED
 from hardware.GPS_PARSER import GPSReader
 from hardware.LED4_TM1650 import LED4digdisp
 from hardware.MUX_TCA9548A import I2CMultiplex
 from hardware.OLED_SSD1306 import SSD1306_I2C
 from hardware.WLAN import WLAN
+
 import functions.timezones as AusTimeZones
 import functions.geohash as Geohash
-import functions.forecast as BoMdata
+import functions.forecast as BoMData
+import functions.time_cruncher as TimeCruncher
 
 PIN_UART_TX = 0
 PIN_UART_RX = 1
@@ -87,8 +90,8 @@ disp8 = HT16K33LED(i2c)                                                         
 disp4H = LED4digdisp(1, PIN_LED4H_SCL, PIN_LED4H_SDA)                                       # Create 4digit LED object (HIGH)         
 disp4L = LED4digdisp(2, PIN_LED4L_SCL, PIN_LED4L_SDA)                                       # Create 4digit LED object (LOW)
 
-BoMLocInfo = BoMdata.BoMLocation()                                                          # Create the BoM Location data structure
-BoMForecastInfo = BoMdata.BoMForecast()                                                     # Create the BoM Forecast data structure
+BoMLocInfo = BoMData.BoMLocation()                                                          # Create the BoM Location data structure
+BoMForecastInfo = BoMData.BoMForecast()                                                     # Create the BoM Forecast data structure
 TimezoneInfo = AusTimeZones.LocalTimezone()                                                 # Create the Timezone data structure
 
 mux.select_port(OLED_ID_TL)                                                                 # select the correct mux port
@@ -99,67 +102,6 @@ mux.select_port(OLED_ID_BL)
 oledBL = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
 mux.select_port(OLED_ID_BR)
 oledBR = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
-
-def now_utc():
-    return time.time()
-
-def now_local():
-    return time.localtime(time.time() + TIMEZONE_OFFSET)
-
-def to_local(epoch_seconds):
-    return time.localtime(epoch_seconds + TIMEZONE_OFFSET)
-
-def to_epoch(time_tuple):
-    return time.mktime(time_tuple)
-
-def get_weekday(GPSy, GPSm, GPSd):
-    y, m, d = GPSy, GPSm, GPSd
-    if m < 3:
-        m += 12
-        y -= 1
-    K = y % 100
-    J = y // 100
-    weekday = (d + (13*(m+1))//5 + K + K//4 + J//4 + 5*J) % 7
-    weekday = (weekday + 6) % 7
-    return weekday
-
-def parse_iso8601_datetime(ts: str) -> int:
-    try:
-        date, timepart = ts.split("T")
-    except ValueError:
-        raise ValueError("Invalid ISO8601 string: %s" % ts)
-
-    year, month, day = map(int, date.split("-"))
-
-    # Remove trailing Z if present
-    timepart = timepart.rstrip("Z")
-
-    # Handle fractional seconds by splitting on "."
-    if "." in timepart:
-        timepart, _ = timepart.split(".", 1)  # drop fraction
-
-    parts = list(map(int, timepart.split(":")))
-    if len(parts) == 2:      # "HH:MM"
-        hh, mm = parts
-        ss = 0
-    elif len(parts) == 3:    # "HH:MM:SS"
-        hh, mm, ss = parts
-    else:
-        raise ValueError("Invalid time part in: %s" % ts)
-
-    # Build time tuple for mktime
-    return time.mktime((year, month, day, hh, mm, ss, 0, 0))
-
-def parse_iso8601_date(ts: str):
-    if not ts or not ts.strip():
-        raise ValueError("Empty date string")
-    ts = ts.strip()
-    try:
-        date_part = ts.split("T")[0]   # ignore time
-        year, month, day = map(int, date_part.split("-"))
-    except Exception as e:
-        raise ValueError(f"Invalid date string '{ts}': {e}")
-    return year, month, day
 
 async def check_Wifi():
     global VALID_WIFI_CONNECTION
@@ -246,7 +188,7 @@ async def get_GPS_data():
     GEOHASH = Geohash.encode(float(GPS_DATA.latitude), float(GPS_DATA.longitude), precision=7)
     
     # get and set the pico's internal clock [UTC]
-    weekday = get_weekday(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day)
+    weekday = TimeCruncher.get_weekday(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day)
     pico_rtc.datetime((GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, weekday, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second, 0))
     
     # get and set the timezone offset
@@ -256,7 +198,7 @@ async def get_GPS_data():
     TIMEZONE_OFFSET = TimezoneInfo.tz_offset_minutes * 60
     
     # get and set the local date
-    C_Y, C_M, C_D, _, _, _, C_WD, _ = now_local()
+    C_Y, C_M, C_D, _, _, _, C_WD, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
     print(f"LY{C_Y} LM{C_M} LD{C_D} LWD{C_WD}")
     
     if not GPS_DATA.year == None:
@@ -288,13 +230,13 @@ async def update_time_sync():
             print("update_time_sync() dreams of VALID_GPS_DATA...")
         else:
             GPS_DATA = GPS_obj.get_data()
-            weekday = get_weekday(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day)
+            weekday = TimeCruncher.get_weekday(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day)
             pico_rtc.datetime((GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, weekday, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second, 0))
             if TIMEZONE_OFFSET == None:
                 TimezoneInfo.update_localtime(GPS_DATA.latitude,GPS_DATA.longitude,(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second))
                 TIMEZONE_OFFSET = TimezoneInfo.tz_offset_minutes * 60
                 print("update_time_sync() has re-calculated the TIMEZONE_OFFSET.")         
-            C_Y, C_M, C_D, _, _, _, C_WD, _ = now_local()
+            C_Y, C_M, C_D, _, _, _, C_WD, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
             print("update_time_sync() has re-calculated the TIME.")  
         await asyncio.sleep(900)
 
@@ -304,7 +246,7 @@ async def update_new_forecast_data():
         print("update_new_forecast_data()")
         now = time.time()
         raw_next = BoMForecastInfo.fc_metadata.fc_next_issue_time or "2013-10-14T10:25:00Z"
-        next = parse_iso8601_datetime(raw_next)
+        next = TimeCruncher.parse_8601datetime(raw_next)
         waiting_time = max((next - now), 0)
         if now > next:
             print("update_new_forecast_data() suggests it's time for a new forecast.")
@@ -338,7 +280,7 @@ async def update_clock_display():
         print("update_clock_display() dreams of a non-zero TIMEZONE_OFFSET...")
         await asyncio.sleep(7)
     while True:
-        y, m, d, hh, mm, ss, wd, _ = now_local()
+        y, m, d, hh, mm, ss, wd, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
         time_str = f"{hh:02} .{mm:02} .{ss:02}"
         disp8.set_string(time_str, "r")
         await asyncio.sleep(0.2)
@@ -372,9 +314,8 @@ async def get_forecast():
     else:
         validText = None
         fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
-        TD_Y, TD_M, TD_D, _, _, _, _, _  = to_local(parse_iso8601_datetime(fc_data[0].fc_date))
-        
-        TM_Y, TM_M, TM_D, _, _, _, _, _  = to_local(parse_iso8601_datetime(fc_data[1].fc_date))
+        TD_Y, TD_M, TD_D, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[0].fc_date, TIMEZONE_OFFSET)
+        TM_Y, TM_M, TM_D, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[1].fc_date, TIMEZONE_OFFSET)
         
         TD_MAX = fc_data[0].fc_temp_max
         TD_MIN = fc_data[0].fc_temp_min
@@ -403,7 +344,7 @@ async def update_temperature_display():
         await asyncio.sleep(30)    
     while True:
         print("update_temperature_display()")
-        _, _, _, hh, _, _, _, _ = now_local()
+        _, _, _, hh, _, _, _, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
         if hh < 4 or hh > 17:
             str_onl = f"{ON_LOW}*C"
             disp4H.show_string(str_onl)
@@ -514,14 +455,11 @@ async def main():
     # tasks.append(asyncio.create_task(update_GPS_data()))
     print("ALL TASKS STARTED!")
 
-
 disp8.set_brightness(15)                                        # TURN ON THE 8 DIGIT DISPLAY WITH MAX BRIGHTNESS
 disp4H.display_on(0)                                            # TURN ON THE UPPER 4 DIGIT DISPLAY WITH MAX BRIGHTNESS
 disp4H.show_string("*o*o")                                      # display underscore placeholder
 disp4L.display_on(0)                                            # TURN ON THE LOWER 4 DIGIT DISPLAY WITH MAX BRIGHTNESS
 disp4L.show_string("o*o*")                                      # display underscore placeholder
-
-
 
 # NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION
 # C_WD = 2

@@ -372,8 +372,8 @@ class SSD1306(framebuf.FrameBuffer):
                                 if y < self.height:
                                     self.pixel(x, y, c)
     
-    def display_pbm(self, name, x_offset=0, y_offset=0, size=47, c=1):
-        pbm_path = f"graphics/{name}_{size}.pbm"
+    def display_pbm(self, name, x_offset=0, y_offset=0, c=1):
+        pbm_path = f"graphics/{name}.pbm"
 
         try:
             with open(pbm_path, "r") as f:
