@@ -184,15 +184,40 @@ async def get_GPS_fix():
     else:
         VALID_GPS_FIX = False
         t = 0.1
-        i = 0
         while not GPS_obj.has_fix:
             GPS_DATA = GPS_obj.get_data()
             NoS = f"-Sats {GPS_obj.satellites}-"
             disp8.set_string(NoS, "r")
+            disp4H.show_string(" _# ")
+            disp4L.show_string(" ~~ ")
+            await asyncio.sleep(t)
             print("get_GPS_fix() listens for satellites...")
-            # insert some radar-like steps
-            await asyncio.sleep(1)
-
+            disp4H.show_string(" _=>")
+            await asyncio.sleep(t)
+            disp4H.show_string(" __=")
+            await asyncio.sleep(t)
+            disp4H.show_string(" __ ")
+            disp4L.show_string(" ~~>")
+            await asyncio.sleep(t)
+            disp4L.show_string(" ~>=")
+            await asyncio.sleep(t)
+            disp4L.show_string(" ~# ")
+            await asyncio.sleep(t)
+            NoS = f"-Sats {GPS_obj.satellites}-"
+            disp8.set_string(NoS, "r")
+            disp4L.show_string(" #~ ")
+            await asyncio.sleep(t)
+            disp4L.show_string("=>~ ")
+            await asyncio.sleep(t)
+            disp4L.show_string(">~~ ")
+            await asyncio.sleep(t)
+            disp4L.show_string(" ~~ ")
+            disp4H.show_string("=__ ")
+            await asyncio.sleep(t)
+            disp4H.show_string(">=_ ")
+            await asyncio.sleep(t)
+            disp4H.show_string(" #_ ")
+            await asyncio.sleep(t)
         GPS_DATA = GPS_obj.get_data()
         VALID_GPS_FIX = True
     return
