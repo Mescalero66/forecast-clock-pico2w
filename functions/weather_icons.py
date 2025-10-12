@@ -3,7 +3,6 @@ import functions.time_cruncher as TimeCruncher
 
 def get_icon(icon_descriptor, pixels, timezone_offset):
     _, _, _, hh, _, _, _, _ = TimeCruncher.now_local(timezone_offset)
-    icon = None
     if icon_descriptor == "sunny" or icon_descriptor == "clear":
         if hh > 17 or hh < 5:
             return f"clear-night-{pixels}"
