@@ -14,6 +14,10 @@ import functions.timezones as AusTimeZones
 import functions.geohash as Geohash
 import functions.forecast as BoMData
 import functions.time_cruncher as TimeCruncher
+import functions.weather_icons as IconGrabber
+
+from functions.string_writer import ezFBfont as ezFBfont
+from fonts import spleen8, spleen12, spleen16, spleen23, helvetica15bold, helvetica18bold, schoolbook16, schoolbook16bold
 
 PIN_UART_TX = 0
 PIN_UART_RX = 1
@@ -96,12 +100,35 @@ TimezoneInfo = AusTimeZones.LocalTimezone()                                     
 
 mux.select_port(OLED_ID_TL)                                                                 # select the correct mux port
 oledTL = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)                                       # and create the OLED object
+oledTL8 = ezFBfont(oledTL, spleen8)
+oledTL12 = ezFBfont(oledTL, spleen12)
+oledTL16 = ezFBfont(oledTL, spleen16)
+oledTL23 = ezFBfont(oledTL, spleen23)
+oledTLhead = ezFBfont(oledTL, helvetica15bold, hgap=2)
+
 mux.select_port(OLED_ID_TR)
 oledTR = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
+oledTR8 = ezFBfont(oledTR, spleen8)
+oledTR12 = ezFBfont(oledTR, spleen12)
+oledTR16 = ezFBfont(oledTR, spleen16)
+oledTR23 = ezFBfont(oledTR, spleen23)
+oledTRhead = ezFBfont(oledTR, helvetica15bold, hgap=2)
+
 mux.select_port(OLED_ID_BL)
 oledBL = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
+oledBL8 = ezFBfont(oledBL, spleen8)
+oledBL12 = ezFBfont(oledBL, spleen12)
+oledBL16 = ezFBfont(oledBL, spleen16)
+oledBL23 = ezFBfont(oledBL, spleen23)
+oledBLhead = ezFBfont(oledBL, helvetica15bold, hgap=2)
+
 mux.select_port(OLED_ID_BR)
 oledBR = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
+oledBR8 = ezFBfont(oledBR, spleen8)
+oledBR12 = ezFBfont(oledBR, spleen12)
+oledBR16 = ezFBfont(oledBR, spleen16)
+oledBR23 = ezFBfont(oledBR, spleen23)
+oledBRhead = ezFBfont(oledBR, helvetica15bold, hgap=2)
 
 async def check_Wifi():
     global VALID_WIFI_CONNECTION
@@ -251,7 +278,7 @@ async def update_new_forecast_data():
         if now > next:
             print("update_new_forecast_data() suggests it's time for a new forecast.")
             asyncio.create_task(get_forecast())
-            await asyncio.sleep(30)
+            await asyncio.sleep(60)
         await asyncio.sleep(waiting_time)
 
 async def get_location():
@@ -370,9 +397,13 @@ async def refresh_oleds():
 
         # clear the screens
         oledTL.fill(0)
+        oledTL.rect(0, 0, 128, 16, 1)
         oledBL.fill(0)
+        oledBL.rect(0, 0, 128, 16, 1)
         oledTR.fill(0)
+        oledTR.rect(0, 0, 128, 16, 1)
         oledBR.fill(0)
+        oledBR.rect(0, 0, 128, 16, 1)
 
         # top left
         oledTL.banner_text_inverted(str_td_dow, scale=14)
@@ -462,79 +493,105 @@ disp4L.display_on(0)                                            # TURN ON THE LO
 disp4L.show_string("o*o*")                                      # display underscore placeholder
 
 # NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION
-# C_WD = 2
-# TD_D = 7
-# TD_M = 10
-# TD_Y = 2025
-# TM_D = 8
-# TM_Y = 2025
-# TD_M = 5
-# TM_M = 6
-# C_LN = "Huntingdale"
-# C_LS = "Vic"
-# TD_MAX = 21
-# TD_MIN = 10
-# TD_RAIN = 90
-# TD_ICON = "shower"
-# TD_TEXT = "Shower or two."
-# ON_LOW = 10
-# TM_MAX = 20
-# TM_MIN = 10
-# TM_RAIN = 95
-# TM_ICON = "shower"
-# TM_TEXT = "Showers increasing."
+C_WD = 2
+TD_D = 7
+TD_M = 10
+TD_Y = 2025
+TM_D = 8
+TM_Y = 2025
+TD_M = 5
+TM_M = 6
+C_LN = "Huntingdale"
+C_LS = "Vic"
+TD_MAX = 21
+TD_MIN = 10
+TD_RAIN = 90
+TD_ICON = "shower"
+TD_TEXT = "Shower or two."
+ON_LOW = 10
+TM_MAX = 20
+TM_MIN = 10
+TM_RAIN = 95
+TM_ICON = "partly_cloudy"
+TM_TEXT = "Showers increasing."
+TIMEZONE_OFFSET = 39600
+pico_rtc.datetime((2025, 10, 14, 2, 6, 46, 1, 0))
 
-# str_td_dow = DAYS_OF_WEEK[C_WD % 7]
-# str_tm_dow = DAYS_OF_WEEK[(C_WD + 1) % 7]
+oledTL.fill(0)
+oledTL.fill_rect(0, 0, 128, 16, 1)
+oledBL.fill(0)
+oledBL.fill_rect(0, 0, 128, 16, 1)
+oledTR.fill(0)
+oledTR.fill_rect(0, 0, 128, 16, 1)
+oledBR.fill(0)
+oledBR.fill_rect(0, 0, 128, 16, 1)
 
-# # get the months of the year
-# str_td_moy = MONTHS_OF_YEAR[TD_M]
-# str_tm_moy = MONTHS_OF_YEAR[TM_M]
+str_td_dow = DAYS_OF_WEEK[C_WD % 7]
+str_tm_dow = DAYS_OF_WEEK[(C_WD + 1) % 7]
 
-# oledTL.fill(0)
-# oledBL.fill(0)
-# oledTR.fill(0)
-# oledBR.fill(0)
+# get the months of the year
+str_td_moy = MONTHS_OF_YEAR[TD_M]
+str_tm_moy = MONTHS_OF_YEAR[TM_M]
 
-# # top left
+# top left - this is the model for the below
 # oledTL.banner_text_inverted(str_td_dow, scale=14)
-# str_td_date = f"{TD_D:02} {str_td_moy}"
-# str_td_yy = f"{TD_Y:04}"
+oledTLhead.write(str_td_dow, x=64, halign="center", y=1, fg=0, bg=1)
+str_td_date = f"{TD_D:02} {TD_M:02} {TD_Y:04}"
+oledTL23.write(str_td_date, y=16, x=64)
 # oledTL.input_text(str_td_date, y_start=21, x_scale=2, y_scale=3)
 # oledTL.input_text(str_td_yy, y_start=49, x_scale=2, y_scale=2)
+oledTL16.write(TD_TEXT, halign="center", valign="bottom", x=63, y=50)
+oledTL16.write(TM_TEXT, halign="center", valign="bottom", x=63, y=64)
 
-# # bottom left
+# bottom left
 # oledBL.banner_text_inverted(str_tm_dow, scale=14)
-# str_tm_date = f"{TM_D:02} {str_tm_moy}"
-# str_tm_yy = f"{TM_Y:04}"
+oledBL16.write(str_tm_dow, x=64, halign="center", y=1, fg=0, bg=1)
+str_tm_date = f"{TM_D:02} {str_tm_moy}"
+str_tm_yy = f"{TM_Y:04}"
+oledBL16.write(str_tm_date, y= 21, x=64)
 # oledBL.input_text(str_tm_date, y_start=21, x_scale=2, y_scale=3)
+oledBL12.write(str_tm_yy, y= 49, x=64)
 # oledBL.input_text(str_tm_yy, y_start=49, x_scale=2, y_scale=2)
 
-# # top right
+# top right
 # oledTR.banner_text_inverted(C_LN, scale=11)
-# str_rain_percent = f"{TD_RAIN:0}%"
-# oledTR.input_text(str_rain_percent, x_start=80, y_start=20, x_scale=2, y_scale=2)
-# TD_ICON = "clear"
-# oledTR.display_pbm(TD_ICON, x_offset=0, y_offset=17, size=47)
-# oledTR.input_text(TD_TEXT, y_start=55, x_scale=1, spacer=0, y_scale=1)
+oledTR16.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
+# oledTR.fill_rect(0, 16, 128, 2, 0)
+icon = IconGrabber.get_icon(TD_ICON, 37, TIMEZONE_OFFSET)
+oledTR.display_pbm(icon, x_offset=5, y_offset=17)
+oledTR.input_text("RAIN", x_start=56, y_start=17, spacer=0, x_scale=1, y_scale=1)
+str_rain_percent = f"{TD_RAIN:0}%"
+oledTR.input_text(str_rain_percent, x_start=56, y_start=20, spacer=0, x_scale=1, y_scale=2)
+oledTR.input_text("MIN", x_start=92, y_start=17, spacer=0, x_scale=2, y_scale=2)
+str_min = f"{TM_MIN:0}-C"
+oledTR.input_text(str_min, x_start=92, y_start=25, spacer=0, x_scale=1, y_scale=2)
+# oledTR.input_text(TD_TEXT, y_start=56, x_scale=1, spacer=0, y_scale=1)
+oledTR12.write(TD_TEXT, halign="center", x=64, y=52)
 
-# # bottom right
+
+# bottom right
 # oledBR.banner_text_inverted(C_LN, scale=11)
-# str_rain_percent = f"{TM_RAIN:0}%"
-# oledBR.input_text(str_rain_percent, x_start=80, y_start=20, x_scale=2, y_scale=2)
-# TM_ICON = "partly_cloudy"
-# oledBR.display_pbm(TM_ICON, x_offset=0, y_offset=17, size=38)
-# oledBR.input_text(TM_TEXT, y_start=56, x_scale=1, spacer=-1, y_scale=1)
+oledBR16.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
+icon = IconGrabber.get_icon(TM_ICON, 37, TIMEZONE_OFFSET)
+oledBR.display_pbm(icon, x_offset=5, y_offset=17)
+str_rain_percent = f"{TM_RAIN:0}%"
+oledBR.input_text(str_rain_percent, x_start=80, y_start=20, spacer=0, x_scale=1, y_scale=1)
+str_min = f"{TM_MIN:0}*C"
+oledBR.input_text(str_min, x_start=80, y_start=20, spacer=0, x_scale=1, y_scale=2)
+oledBR.display_pbm("min_temp-35", x_offset=70, y_offset=16)
 
-# print("refreshing OLEDs")
-# mux.select_port(OLED_ID_TL)
-# oledTL.show()
-# mux.select_port(OLED_ID_BL)
-# oledBL.show()
-# mux.select_port(OLED_ID_TR)
-# oledTR.show()
-# mux.select_port(OLED_ID_BR)
-# oledBR.show()
+oledBR.input_text(TM_TEXT, y_start=56, x_scale=1, spacer=-2, y_scale=1)
+
+
+print("refreshing OLEDs")
+mux.select_port(OLED_ID_TL)
+oledTL.show()
+mux.select_port(OLED_ID_BL)
+oledBL.show()
+mux.select_port(OLED_ID_TR)
+oledTR.show()
+mux.select_port(OLED_ID_BR)
+oledBR.show()
 # NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION
 
 #wlan.disconnectWiFi()
