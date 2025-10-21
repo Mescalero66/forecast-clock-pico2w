@@ -82,7 +82,6 @@ class ForecastData:
         self.fc_short_text = ""
         self.fc_extended_text = ""
 
-
 class BoMForecast:
     def __init__(self):
         self.fc_metadata = ForecastMetadata()

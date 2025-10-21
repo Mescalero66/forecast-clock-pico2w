@@ -262,10 +262,11 @@ async def update_time_sync():
             if TIMEZONE_OFFSET == None:
                 TimezoneInfo.update_localtime(GPS_DATA.latitude,GPS_DATA.longitude,(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second))
                 TIMEZONE_OFFSET = TimezoneInfo.tz_offset_minutes * 60
-                print("update_time_sync() has re-calculated the TIMEZONE_OFFSET.")         
+                print("update_time_sync() has re-calculated the TIMEZONE_OFFSET.")  
+            await asyncio.sleep(5)  
             C_Y, C_M, C_D, _, _, _, C_WD, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
             print("update_time_sync() has re-calculated the TIME.")  
-        await asyncio.sleep(900)
+        await asyncio.sleep(599)
 
 async def update_new_forecast_data():
     await asyncio.sleep(10)
@@ -274,6 +275,7 @@ async def update_new_forecast_data():
         now = time.time()
         raw_next = BoMForecastInfo.fc_metadata.fc_next_issue_time or "2013-10-14T10:25:00Z"
         next = TimeCruncher.parse_8601datetime(raw_next)
+        print(f"update_new_forecast_data() thinks the next forecast update should be at {next}.")
         waiting_time = max((next - now), 0)
         if now > next:
             print("update_new_forecast_data() suggests it's time for a new forecast.")
@@ -323,6 +325,7 @@ async def date_check(y, m, d, wd):
     # print("date_check()")
     if (y, m, d != C_Y, C_M, C_D):
         C_Y, C_M, C_D, C_WD = y, m, d, wd
+        # asyncio.create_task(get_forecast())
         REQUIRE_REFRESH = True
     return
 
@@ -341,21 +344,40 @@ async def get_forecast():
     else:
         validText = None
         fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
-        TD_Y, TD_M, TD_D, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[0].fc_date, TIMEZONE_OFFSET)
-        TM_Y, TM_M, TM_D, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[1].fc_date, TIMEZONE_OFFSET)
-        
-        TD_MAX = fc_data[0].fc_temp_max
-        TD_MIN = fc_data[0].fc_temp_min
-        TD_RAIN = fc_data[0].fc_rain_chance
-        TD_ICON = fc_data[0].fc_icon_descriptor
-        TD_TEXT = fc_data[0].fc_short_text
-        validText = fc_data[0].fc_short_text 
+        _, chkM0, chkD0, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[0].fc_date, TIMEZONE_OFFSET)
+        if (C_D == chkD0) and (C_M == chkM0):
+            i = 0
+        else:
+            _, chkM1, chkD1, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[1].fc_date, TIMEZONE_OFFSET)
+            if (C_D == chkD1) and (C_M == chkM1):
+                i = 1
+            else:
+                _, chkM2, chkD2, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[2].fc_date, TIMEZONE_OFFSET)
+                if (C_D == chkD2) and (C_M == chkM2):
+                    i = 2
+                else:
+                    _, chkM3, chkD3, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[3].fc_date, TIMEZONE_OFFSET)
+                    if (C_D == chkD3) and (C_M == chkM3):
+                        i = 3
+                    else:
+                        _, chkM4, chkD4, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[4].fc_date, TIMEZONE_OFFSET)
+                        if (C_D == chkD4) and (C_M == chkM4):
+                            i = 4
+
+        TD_Y, TD_M, TD_D, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[i].fc_date, TIMEZONE_OFFSET)
+        TM_Y, TM_M, TM_D, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[i + 1].fc_date, TIMEZONE_OFFSET)        
+        TD_MAX = fc_data[i].fc_temp_max
+        TD_MIN = fc_data[i].fc_temp_min
+        TD_RAIN = fc_data[i].fc_rain_chance
+        TD_ICON = fc_data[i].fc_icon_descriptor
+        TD_TEXT = fc_data[i].fc_short_text
+        validText = fc_data[i].fc_short_text 
         ON_LOW = fc_meta.fc_overnight_min
-        TM_MAX = fc_data[1].fc_temp_max
-        TM_MIN = fc_data[1].fc_temp_min
-        TM_RAIN = fc_data[1].fc_rain_chance
-        TM_ICON = fc_data[1].fc_icon_descriptor
-        TM_TEXT = fc_data[1].fc_short_text
+        TM_MAX = fc_data[i + 1].fc_temp_max
+        TM_MIN = fc_data[i + 1].fc_temp_min
+        TM_RAIN = fc_data[i + 1].fc_rain_chance
+        TM_ICON = fc_data[i + 1].fc_icon_descriptor
+        TM_TEXT = fc_data[i + 1].fc_short_text
         print(f"TD: {TD_Y}{TD_M}{TD_D} Max:{TD_MAX} Min:{TD_MIN} {TD_TEXT}")
         print(f"TM: {TM_Y}{TM_M}{TM_D} Max:{TM_MAX} Min:{TM_MIN} {TM_TEXT}")
         if not validText == None:
@@ -383,9 +405,10 @@ async def update_temperature_display():
         await asyncio.sleep(300)
 
 async def refresh_oleds():
+    global REQUIRE_REFRESH
     while True:
         while not REQUIRE_REFRESH:
-            await asyncio.sleep(30)
+            await asyncio.sleep(60)
         
         # get the days of the week
         str_td_dow = DAYS_OF_WEEK[C_WD % 7]
@@ -394,6 +417,9 @@ async def refresh_oleds():
         # get the months of the year
         str_td_moy = MONTHS_OF_YEAR[TD_M]
         str_tm_moy = MONTHS_OF_YEAR[TM_M]
+
+        # get the hour of the day
+        _, _, _, hh, _, _, _, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
 
         # clear the screens and fill in the banners
         oledTL.fill(0)
@@ -406,6 +432,14 @@ async def refresh_oleds():
         oledBR.rect(0, 0, 128, 16, 1)
 
         # top left
+        date_header = f"{TD_D:02} {str_td_moy} {TD_Y:04}"
+        oledTLhead.write(date_header, x=64, halign="center", y=1, fg=0, bg=1)
+        oledTL23.write(str_td_dow, halign="center", y=17, x=64)
+        oledTL16.write("Rain: ", halign="left", y=46, x=4)
+        str_rain_percent = f"{TD_RAIN:0}%"
+        oledTL23.write(str_rain_percent, halign="right", y=41, x=123)
+
+        # bottom left
         date_header = f"{TM_D:02} {str_tm_moy} {TM_Y:04}"
         oledBLhead.write(date_header, x=64, halign="center", y=1, fg=0, bg=1)
         oledBL23.write(str_tm_dow, halign="center", y=17, x=64)
@@ -413,22 +447,18 @@ async def refresh_oleds():
         str_rain_percent = f"{TM_RAIN:0}%"
         oledBL23.write(str_rain_percent, halign="right", y=42, x=123)
 
-        # bottom left
-        oledBL.banner_text_inverted(str_tm_dow, scale=14)
-        str_tm_date = f"{TM_D:02} {str_tm_moy}"
-        str_tm_yy = f"{TM_Y:04}"
-        oledBL.input_text(str_tm_date, y_start=20, x_scale=2, y_scale=4)
-        oledBL.input_text(str_tm_yy, y_start=55, x_scale=1, y_scale=1)
-
         # top right
         oledTRhead.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
         icon = IconGrabber.get_icon(TD_ICON, 37, TIMEZONE_OFFSET)
-        oledTR.display_pbm(icon, x_offset=5, y_offset=17)
+        oledTR.display_pbm(icon, x_offset=5, y_offset=17)           
         test_text = ezFBfont.split_text(TD_TEXT)
         oledTR12.write(test_text, halign="center", valign="center", y=34, x=90)
-        oledTR12.write("Min:", halign="left", y=54, x=55)
-        str_min = f"{TD_MIN:0}°C"
-        oledTR16.write(str_min, halign="right", y=53, x=122)
+        if hh < 4 or hh > 17:
+            oledTR12.write("Overnight Low:", halign="left", y=54, x=55)
+        else:
+            oledTR12.write("Min:", halign="left", y=54, x=55)
+            str_min = f"{TD_MIN:0}°C"
+            oledTR16.write(str_min, halign="right", y=53, x=122)
 
         # bottom right
         oledBRhead.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
@@ -450,6 +480,8 @@ async def refresh_oleds():
         mux.select_port(OLED_ID_BR)
         oledBR.show()
 
+        REQUIRE_REFRESH = False
+
         await asyncio.sleep(60)
 
 async def refresh_right_oleds():
@@ -466,19 +498,20 @@ async def main():
     time.sleep(1)
 
     if not VALID_GPS_DATA:
-        await get_GPS_data()                                                    # if the GPS data didn't make it, try one more time
+        await get_GPS_data()                                                          # if the GPS data didn't make it, try one more time
 
     print("geoHash: ", GEOHASH)
     time.sleep(1)
 
     await get_location()
     time.sleep(1)
-    print("Location: ", C_LN, " [", C_LS,"]")
+    # print("Location: ", C_LN, " [", C_LS,"]")
 
     await get_forecast()
     time.sleep(3)
-    vF = f"Forecast: {TD_D:02}/{TD_M:02}/{TD_Y:04}"
-    print("Forecast Date: ", vF)
+    # vF = f"Forecast: {TD_D:02}/{TD_M:02}/{TD_Y:04}"
+    # print("Forecast Date: ", vF)
+    await asyncio.sleep(7)
     
     asyncio.create_task(update_time_sync())
     await asyncio.sleep(10)
@@ -504,98 +537,9 @@ async def main():
 
 disp8.set_brightness(15)                                        # TURN ON THE 8 DIGIT DISPLAY WITH MAX BRIGHTNESS
 disp4H.display_on(0)                                            # TURN ON THE UPPER 4 DIGIT DISPLAY WITH MAX BRIGHTNESS
-disp4H.show_string("*o*o")                                      # display underscore placeholder
-disp4L.display_on(0)                                            # TURN ON THE LOWER 4 DIGIT DISPLAY WITH MAX BRIGHTNESS
-disp4L.show_string("o*o*")                                      # display underscore placeholder
-
-# NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION
-C_WD = 2
-TD_D = 7
-TD_M = 10
-TD_Y = 2025
-TM_D = 8
-TM_Y = 2025
-TD_M = 5
-TM_M = 6
-C_LN = "Huntingdale"
-C_LS = "Vic"
-TD_MAX = 21
-TD_MIN = 10
-TD_RAIN = 90
-TD_ICON = "shower"
-TD_TEXT = "Shower or two."
-ON_LOW = 10
-TM_MAX = 20
-TM_MIN = 10
-TM_RAIN = 95
-TM_ICON = "partly_cloudy"
-TM_TEXT = "Showers increasing."
-TIMEZONE_OFFSET = 39600
-pico_rtc.datetime((2025, 10, 14, 2, 6, 46, 1, 0))
-
-oledTL.fill(0)
-oledTL.fill_rect(0, 0, 128, 16, 1)
-oledBL.fill(0)
-oledBL.fill_rect(0, 0, 128, 16, 1)
-oledTR.fill(0)
-oledTR.fill_rect(0, 0, 128, 16, 1)
-oledBR.fill(0)
-oledBR.fill_rect(0, 0, 128, 16, 1)
-
-str_td_dow = DAYS_OF_WEEK[C_WD % 7]
-str_tm_dow = DAYS_OF_WEEK[(C_WD + 1) % 7]
-
-# get the months of the year
-str_td_moy = MONTHS_OF_YEAR[TD_M]
-str_tm_moy = MONTHS_OF_YEAR[TM_M]
-
-# top left
-date_header = f"{TD_D:02} {str_td_moy} {TD_Y:04}"
-oledTLhead.write(date_header, x=64, halign="center", y=1, fg=0, bg=1)
-oledTL23.write(str_td_dow, halign="center", y=17, x=64)
-oledTL16.write("Rain: ", halign="left", y=46, x=4)
-str_rain_percent = f"{TD_RAIN:0}%"
-oledTL23.write(str_rain_percent, halign="right", y=41, x=123)
-
-# bottom left
-date_header = f"{TM_D:02} {str_tm_moy} {TM_Y:04}"
-oledBLhead.write(date_header, x=64, halign="center", y=1, fg=0, bg=1)
-oledBL23.write(str_tm_dow, halign="center", y=17, x=64)
-oledBL16.write("Rain: ", halign="left", y=47, x=4)
-str_rain_percent = f"{TM_RAIN:0}%"
-oledBL23.write(str_rain_percent, halign="right", y=42, x=123)
-
-# top right
-oledTRhead.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
-icon = IconGrabber.get_icon(TD_ICON, 37, TIMEZONE_OFFSET)
-oledTR.display_pbm(icon, x_offset=5, y_offset=17)
-test_text = ezFBfont.split_text(TD_TEXT)
-oledTR12.write(test_text, halign="center", valign="center", y=34, x=90)
-oledTR12.write("Min:", halign="left", y=54, x=55)
-str_min = f"{TD_MIN:0}°C"
-oledTR16.write(str_min, halign="right", y=53, x=122)
-
-# bottom right
-oledBRhead.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
-icon = IconGrabber.get_icon(TM_ICON, 37, TIMEZONE_OFFSET)
-oledBR.display_pbm(icon, x_offset=5, y_offset=17)
-test_text = ezFBfont.split_text(TM_TEXT)
-oledBR12.write(test_text, halign="center", valign="center", y=34, x=90)
-oledBR12.write("Min:", halign="left", y=54, x=55)
-str_min = f"{TM_MIN:0}°C"
-oledBR16.write(str_min, halign="right", y=53, x=122)
-
-
-print("refreshing OLEDs")
-mux.select_port(OLED_ID_TL)
-oledTL.show()
-mux.select_port(OLED_ID_BL)
-oledBL.show()
-mux.select_port(OLED_ID_TR)
-oledTR.show()
-mux.select_port(OLED_ID_BR)
-oledBR.show()
-# NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION - NOT FOR PRODUCTION
+disp4H.show_string("__*C")                                     
+disp4L.display_on(0)
+disp4L.show_string("__*C")
 
 #wlan.disconnectWiFi()
 networks = wlan.scanWiFi()                                                                  # scan for the WLAN
