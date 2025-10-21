@@ -395,7 +395,7 @@ async def refresh_oleds():
         str_td_moy = MONTHS_OF_YEAR[TD_M]
         str_tm_moy = MONTHS_OF_YEAR[TM_M]
 
-        # clear the screens
+        # clear the screens and fill in the banners
         oledTL.fill(0)
         oledTL.rect(0, 0, 128, 16, 1)
         oledBL.fill(0)
@@ -406,11 +406,12 @@ async def refresh_oleds():
         oledBR.rect(0, 0, 128, 16, 1)
 
         # top left
-        oledTL.banner_text_inverted(str_td_dow, scale=14)
-        str_td_date = f"{C_D:02} {str_td_moy}"
-        str_td_yy = f"{C_Y:04}"
-        oledTL.input_text(str_td_date, y_start=20, x_scale=2, y_scale=4)
-        oledTL.input_text(str_td_yy, y_start=55, x_scale=1, y_scale=1)
+        date_header = f"{TM_D:02} {str_tm_moy} {TM_Y:04}"
+        oledBLhead.write(date_header, x=64, halign="center", y=1, fg=0, bg=1)
+        oledBL23.write(str_tm_dow, halign="center", y=17, x=64)
+        oledBL16.write("Rain: ", halign="left", y=47, x=4)
+        str_rain_percent = f"{TM_RAIN:0}%"
+        oledBL23.write(str_rain_percent, halign="right", y=42, x=123)
 
         # bottom left
         oledBL.banner_text_inverted(str_tm_dow, scale=14)
@@ -420,10 +421,24 @@ async def refresh_oleds():
         oledBL.input_text(str_tm_yy, y_start=55, x_scale=1, y_scale=1)
 
         # top right
-        oledTR.banner_text_inverted(C_LN, scale=11)
+        oledTRhead.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
+        icon = IconGrabber.get_icon(TD_ICON, 37, TIMEZONE_OFFSET)
+        oledTR.display_pbm(icon, x_offset=5, y_offset=17)
+        test_text = ezFBfont.split_text(TD_TEXT)
+        oledTR12.write(test_text, halign="center", valign="center", y=34, x=90)
+        oledTR12.write("Min:", halign="left", y=54, x=55)
+        str_min = f"{TD_MIN:0}°C"
+        oledTR16.write(str_min, halign="right", y=53, x=122)
 
         # bottom right
-        oledBR.banner_text_inverted(C_LN, scale=11)
+        oledBRhead.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
+        icon = IconGrabber.get_icon(TM_ICON, 37, TIMEZONE_OFFSET)
+        oledBR.display_pbm(icon, x_offset=5, y_offset=17)
+        test_text = ezFBfont.split_text(TM_TEXT)
+        oledBR12.write(test_text, halign="center", valign="center", y=34, x=90)
+        oledBR12.write("Min:", halign="left", y=54, x=55)
+        str_min = f"{TM_MIN:0}°C"
+        oledBR16.write(str_min, halign="right", y=53, x=122)
 
         print("refreshing OLEDs")
         mux.select_port(OLED_ID_TL)
@@ -438,6 +453,7 @@ async def refresh_oleds():
         await asyncio.sleep(60)
 
 async def refresh_right_oleds():
+    
     # do something
     test = 0
 
@@ -553,10 +569,8 @@ oledBL23.write(str_rain_percent, halign="right", y=42, x=123)
 oledTRhead.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
 icon = IconGrabber.get_icon(TD_ICON, 37, TIMEZONE_OFFSET)
 oledTR.display_pbm(icon, x_offset=5, y_offset=17)
-
-test_text = ezFBfont.split_text("Rain. Windy. Possible storm.")
+test_text = ezFBfont.split_text(TD_TEXT)
 oledTR12.write(test_text, halign="center", valign="center", y=34, x=90)
-
 oledTR12.write("Min:", halign="left", y=54, x=55)
 str_min = f"{TD_MIN:0}°C"
 oledTR16.write(str_min, halign="right", y=53, x=122)
@@ -565,14 +579,11 @@ oledTR16.write(str_min, halign="right", y=53, x=122)
 oledBRhead.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
 icon = IconGrabber.get_icon(TM_ICON, 37, TIMEZONE_OFFSET)
 oledBR.display_pbm(icon, x_offset=5, y_offset=17)
-
-test_text = ezFBfont.split_text("Showers increasing.")
+test_text = ezFBfont.split_text(TM_TEXT)
 oledBR12.write(test_text, halign="center", valign="center", y=34, x=90)
-
 oledBR12.write("Min:", halign="left", y=54, x=55)
 str_min = f"{TM_MIN:0}°C"
 oledBR16.write(str_min, halign="right", y=53, x=122)
-
 
 
 print("refreshing OLEDs")
