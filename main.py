@@ -17,7 +17,7 @@ import functions.time_cruncher as TimeCruncher
 import functions.weather_icons as IconGrabber
 
 from functions.string_writer import ezFBfont as ezFBfont
-from fonts import spleen8, spleen12, spleen16, spleen23, helvetica15bold, helvetica18bold, schoolbook16, schoolbook16bold
+from fonts import spleen8, spleen12, spleen16, spleen23, helvetica15bold
 
 PIN_UART_TX = 0
 PIN_UART_RX = 1
@@ -533,54 +533,46 @@ str_tm_dow = DAYS_OF_WEEK[(C_WD + 1) % 7]
 str_td_moy = MONTHS_OF_YEAR[TD_M]
 str_tm_moy = MONTHS_OF_YEAR[TM_M]
 
-# top left - this is the model for the below
-# oledTL.banner_text_inverted(str_td_dow, scale=14)
-oledTLhead.write(str_td_dow, x=64, halign="center", y=1, fg=0, bg=1)
-str_td_date = f"{TD_D:02} {TD_M:02} {TD_Y:04}"
-oledTL23.write(str_td_date, y=16, x=64)
-# oledTL.input_text(str_td_date, y_start=21, x_scale=2, y_scale=3)
-# oledTL.input_text(str_td_yy, y_start=49, x_scale=2, y_scale=2)
-oledTL16.write(TD_TEXT, halign="center", valign="bottom", x=63, y=50)
-oledTL16.write(TM_TEXT, halign="center", valign="bottom", x=63, y=64)
+# top left
+date_header = f"{TD_D:02} {str_td_moy} {TD_Y:04}"
+oledTLhead.write(date_header, x=64, halign="center", y=1, fg=0, bg=1)
+oledTL23.write(str_td_dow, halign="center", y=17, x=64)
+oledTL16.write("Rain: ", halign="left", y=46, x=4)
+str_rain_percent = f"{TD_RAIN:0}%"
+oledTL23.write(str_rain_percent, halign="right", y=41, x=123)
 
 # bottom left
-# oledBL.banner_text_inverted(str_tm_dow, scale=14)
-oledBL16.write(str_tm_dow, x=64, halign="center", y=1, fg=0, bg=1)
-str_tm_date = f"{TM_D:02} {str_tm_moy}"
-str_tm_yy = f"{TM_Y:04}"
-oledBL16.write(str_tm_date, y= 21, x=64)
-# oledBL.input_text(str_tm_date, y_start=21, x_scale=2, y_scale=3)
-oledBL12.write(str_tm_yy, y= 49, x=64)
-# oledBL.input_text(str_tm_yy, y_start=49, x_scale=2, y_scale=2)
+date_header = f"{TM_D:02} {str_tm_moy} {TM_Y:04}"
+oledBLhead.write(date_header, x=64, halign="center", y=1, fg=0, bg=1)
+oledBL23.write(str_tm_dow, halign="center", y=17, x=64)
+oledBL16.write("Rain: ", halign="left", y=47, x=4)
+str_rain_percent = f"{TM_RAIN:0}%"
+oledBL23.write(str_rain_percent, halign="right", y=42, x=123)
 
 # top right
-# oledTR.banner_text_inverted(C_LN, scale=11)
-oledTR16.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
-# oledTR.fill_rect(0, 16, 128, 2, 0)
+oledTRhead.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
 icon = IconGrabber.get_icon(TD_ICON, 37, TIMEZONE_OFFSET)
 oledTR.display_pbm(icon, x_offset=5, y_offset=17)
-oledTR.input_text("RAIN", x_start=56, y_start=17, spacer=0, x_scale=1, y_scale=1)
-str_rain_percent = f"{TD_RAIN:0}%"
-oledTR.input_text(str_rain_percent, x_start=56, y_start=20, spacer=0, x_scale=1, y_scale=2)
-oledTR.input_text("MIN", x_start=92, y_start=17, spacer=0, x_scale=2, y_scale=2)
-str_min = f"{TM_MIN:0}-C"
-oledTR.input_text(str_min, x_start=92, y_start=25, spacer=0, x_scale=1, y_scale=2)
-# oledTR.input_text(TD_TEXT, y_start=56, x_scale=1, spacer=0, y_scale=1)
-oledTR12.write(TD_TEXT, halign="center", x=64, y=52)
 
+test_text = ezFBfont.split_text("Rain. Windy. Possible storm.")
+oledTR12.write(test_text, halign="center", valign="center", y=34, x=90)
+
+oledTR12.write("Min:", halign="left", y=54, x=55)
+str_min = f"{TD_MIN:0}°C"
+oledTR16.write(str_min, halign="right", y=53, x=122)
 
 # bottom right
-# oledBR.banner_text_inverted(C_LN, scale=11)
-oledBR16.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
+oledBRhead.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
 icon = IconGrabber.get_icon(TM_ICON, 37, TIMEZONE_OFFSET)
 oledBR.display_pbm(icon, x_offset=5, y_offset=17)
-str_rain_percent = f"{TM_RAIN:0}%"
-oledBR.input_text(str_rain_percent, x_start=80, y_start=20, spacer=0, x_scale=1, y_scale=1)
-str_min = f"{TM_MIN:0}*C"
-oledBR.input_text(str_min, x_start=80, y_start=20, spacer=0, x_scale=1, y_scale=2)
-oledBR.display_pbm("min_temp-35", x_offset=70, y_offset=16)
 
-oledBR.input_text(TM_TEXT, y_start=56, x_scale=1, spacer=-2, y_scale=1)
+test_text = ezFBfont.split_text("Showers increasing.")
+oledBR12.write(test_text, halign="center", valign="center", y=34, x=90)
+
+oledBR12.write("Min:", halign="left", y=54, x=55)
+str_min = f"{TM_MIN:0}°C"
+oledBR16.write(str_min, halign="right", y=53, x=122)
+
 
 
 print("refreshing OLEDs")

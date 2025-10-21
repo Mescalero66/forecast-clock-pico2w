@@ -171,3 +171,31 @@ class ezFBfont():
                     xpos += cx + self.hgap
             ypos += high + self.vgap
         return all_chars
+    
+    def split_text(text): 
+        words = text.split()
+        lines = []
+        current = ""
+
+        for word in words:
+            # if adding this word exceeds line length, start new line
+            if len(current) + len(word) + (1 if current else 0) > 10:
+                lines.append(current)
+                current = word
+            else:
+                current += (" " if current else "") + word
+
+        if current:
+            lines.append(current)
+
+        # if too many lines, try to rebalance to <= 3
+        while len(lines) > 3:
+            # merge the shortest two consecutive lines
+            shortest_i = min(range(len(lines)-1), key=lambda i: len(lines[i]) + len(lines[i+1]))
+            merged = lines[shortest_i] + " " + lines[shortest_i+1]
+            lines[shortest_i:shortest_i+2] = [merged]
+
+        # center each line within 10 characters
+        lines = [line.strip().center(10) for line in lines]
+
+        return "\n".join(lines)
