@@ -321,49 +321,34 @@ async def update_clock_display():
 
 async def date_check(y, m, d, wd):
     global C_Y, C_M, C_D, C_WD
-    global REQUIRE_REFRESH
+    # global REQUIRE_REFRESH
     # print("date_check()")
     if (y, m, d != C_Y, C_M, C_D):
         C_Y, C_M, C_D, C_WD = y, m, d, wd
-        # asyncio.create_task(get_forecast())
-        REQUIRE_REFRESH = True
+        asyncio.create_task(sync_forecast())
+        # REQUIRE_REFRESH = True
     return
 
-async def get_forecast():
-    global VALID_FORECAST_DATA, REQUIRE_REFRESH
+async def sync_forecast():
+    global REQUIRE_REFRESH
     global TD_Y, TD_M, TD_D, TD_MAX, TD_MIN, TD_RAIN, TD_ICON, TD_TEXT
     global ON_LOW
     global TM_Y, TM_M, TM_D, TM_MAX, TM_MIN, TM_RAIN, TM_ICON, TM_TEXT
-    print("get_forecast()")
-    if not VALID_GPS_DATA:
-        print("get_location() dreams of VALID_GPS_DATA...")
-        return
-    elif not GEOHASH:
-        print("get_forecast() dreams of VALID_GEOHASH_DATA...")
+    i = None
+    validText = None
+    if not VALID_FORECAST_DATA:
+        print("sync_forecast() dreams of VALID_FORECAST_DATA...")
         return
     else:
-        validText = None
-        fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
-        _, chkM0, chkD0, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[0].fc_date, TIMEZONE_OFFSET)
-        if (C_D == chkD0) and (C_M == chkM0):
-            i = 0
-        else:
-            _, chkM1, chkD1, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[1].fc_date, TIMEZONE_OFFSET)
-            if (C_D == chkD1) and (C_M == chkM1):
-                i = 1
-            else:
-                _, chkM2, chkD2, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[2].fc_date, TIMEZONE_OFFSET)
-                if (C_D == chkD2) and (C_M == chkM2):
-                    i = 2
-                else:
-                    _, chkM3, chkD3, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[3].fc_date, TIMEZONE_OFFSET)
-                    if (C_D == chkD3) and (C_M == chkM3):
-                        i = 3
-                    else:
-                        _, chkM4, chkD4, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[4].fc_date, TIMEZONE_OFFSET)
-                        if (C_D == chkD4) and (C_M == chkM4):
-                            i = 4
-
+        fc_meta, fc_data = BoMForecastInfo.fc_metadata, BoMForecastInfo.fc_current_data
+        for idx in range(5):
+            _, chkM, chkD, _, _, _, _, _ = TimeCruncher.parse_8601localtime(fc_data[idx].fc_date, TIMEZONE_OFFSET)
+            if (C_D == chkD) and (C_M == chkM):
+                i = idx
+                break  
+        if not i:
+            print(f"sync_forecast() has a forecast for {fc_data[0].fc_date}, but isn't today {C_D}/{C_M}/{C_Y}???")
+            return
         TD_Y, TD_M, TD_D, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[i].fc_date, TIMEZONE_OFFSET)
         TM_Y, TM_M, TM_D, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[i + 1].fc_date, TIMEZONE_OFFSET)        
         TD_MAX = fc_data[i].fc_temp_max
@@ -381,6 +366,27 @@ async def get_forecast():
         print(f"TD: {TD_Y}{TD_M}{TD_D} Max:{TD_MAX} Min:{TD_MIN} {TD_TEXT}")
         print(f"TM: {TM_Y}{TM_M}{TM_D} Max:{TM_MAX} Min:{TM_MIN} {TM_TEXT}")
         if not validText == None:
+            REQUIRE_REFRESH = True
+            print("sync_forecast() has synced the forecast.")
+        else:
+            print("sync_forecast() has failed to sync the current forecast to the current day.")
+            return
+
+async def get_forecast():
+    global VALID_FORECAST_DATA, REQUIRE_REFRESH
+    print("get_forecast()")
+    if not GEOHASH:
+        print("get_forecast() dreams of VALID_GEOHASH_DATA...")
+        return
+    else:
+        validText = None
+        fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
+        print(f"get_forecast() got a valid response from the BoM at {fc_meta.fc_response_timestamp}")
+        print(f"get_forecast() has a valid forecast from the BoM that was issued at {fc_meta.fc_issue_time}")
+        validText = fc_data[0].fc_short_text 
+        if not validText == None:
+            await sync_forecast()
+            await asyncio.sleep(5)
             VALID_FORECAST_DATA = True
             REQUIRE_REFRESH = True
             print("get_forecast() has updated the forecast.")
