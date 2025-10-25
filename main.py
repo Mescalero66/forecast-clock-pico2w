@@ -137,6 +137,7 @@ async def check_Wifi():
         VALID_WIFI_CONNECTION = True
         return
     else:
+        disp8.set_string("Intrnet", "r")
         wlan.connectWiFi(retries=3, wait_per_try=5)
         if wlan.checkWiFi() == True:
             VALID_WIFI_CONNECTION = True
@@ -155,7 +156,7 @@ async def get_GPS_fix():
         t = 0.1
         while not GPS_obj.has_fix:
             GPS_DATA = GPS_obj.get_data()
-            NoS = f"-Sats {GPS_obj.satellites}-"
+            NoS = f"- {GPS_obj.satellites} GPS-"
             disp8.set_string(NoS, "r")
             disp4H.show_string(" _# ")
             disp4L.show_string(" ~~ ")
@@ -172,7 +173,7 @@ async def get_GPS_fix():
             await asyncio.sleep(t)
             disp4L.show_string(" ~# ")
             await asyncio.sleep(t)
-            NoS = f"-Sats {GPS_obj.satellites}-"
+            NoS = f"- {GPS_obj.satellites} GPS-"
             disp8.set_string(NoS, "r")
             disp4L.show_string(" #~ ")
             await asyncio.sleep(t)
@@ -201,8 +202,8 @@ async def get_GPS_data():
         await get_GPS_fix()
     
     # get the data
-    GPS_DATA = GPS_obj.get_data()
-    print(f"Lat: [{GPS_DATA.latitude}] Long: [{GPS_DATA.longitude}] Alt: [{GPS_DATA.altitude}]")
+    # GPS_DATA = GPS_obj.get_data()
+    # print(f"Lat: [{GPS_DATA.latitude}] Long: [{GPS_DATA.longitude}] Alt: [{GPS_DATA.altitude}]")
 
     # this is the showstopper for getting a valid initial set of data:
     while GPS_DATA.latitude == None or GPS_DATA.longitude == None or GPS_DATA.latitude == 0.0 or GPS_DATA.longitude == 0.0:
@@ -220,13 +221,13 @@ async def get_GPS_data():
     
     # get and set the timezone offset
     GPS_DATA = GPS_obj.get_data()
-    print(f"Y{GPS_DATA.year} M{GPS_DATA.month} D{GPS_DATA.day} H{GPS_DATA.hour} M{GPS_DATA.minute} S{GPS_DATA.second}")
+    # print(f"Y{GPS_DATA.year} M{GPS_DATA.month} D{GPS_DATA.day} H{GPS_DATA.hour} M{GPS_DATA.minute} S{GPS_DATA.second}")
     TimezoneInfo.update_localtime(GPS_DATA.latitude,GPS_DATA.longitude,(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second))
     TIMEZONE_OFFSET = TimezoneInfo.tz_offset_minutes * 60
     
     # get and set the local date
     C_Y, C_M, C_D, _, _, _, C_WD, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
-    print(f"LY{C_Y} LM{C_M} LD{C_D} LWD{C_WD}")
+    # print(f"LY{C_Y} LM{C_M} LD{C_D} LWD{C_WD}")
     
     if not GPS_DATA.year == None:
         VALID_GPS_DATA = True
@@ -275,8 +276,8 @@ async def update_new_forecast_data():
         now = time.time()
         raw_next = BoMForecastInfo.fc_metadata.fc_next_issue_time or "2013-10-14T10:25:00Z"
         next = TimeCruncher.parse_8601datetime(raw_next)
-        print(f"update_new_forecast_data() thinks the next forecast update should be at {next}.")
         waiting_time = max((next - now), 0)
+        print(f"update_new_forecast_data() thinks the next forecast update is {(waiting_time / 60):01} mins away.")
         if now > next:
             print("update_new_forecast_data() suggests it's time for a new forecast.")
             asyncio.create_task(get_forecast())
@@ -343,11 +344,13 @@ async def sync_forecast():
         fc_meta, fc_data = BoMForecastInfo.fc_metadata, BoMForecastInfo.fc_current_data
         for idx in range(5):
             _, chkM, chkD, _, _, _, _, _ = TimeCruncher.parse_8601localtime(fc_data[idx].fc_date, TIMEZONE_OFFSET)
+            print(f"sync_forecast() is comparing {chkM} to {C_M}, and {chkD} to {C_D}")
             if (C_D == chkD) and (C_M == chkM):
                 i = idx
                 break  
-        if not i:
-            print(f"sync_forecast() has a forecast for {fc_data[0].fc_date}, but isn't today {C_D}/{C_M}/{C_Y}???")
+        print(f"sync_forecast() has identified the correct day as #{i}")
+        if i == None:
+            print(f"sync_forecast() has a forecast for {TimeCruncher.parse_8601localtime(fc_data[0].fc_date)}, but isn't today {C_D}/{C_M}/{C_Y}???")
             return
         TD_Y, TD_M, TD_D, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[i].fc_date, TIMEZONE_OFFSET)
         TM_Y, TM_M, TM_D, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[i + 1].fc_date, TIMEZONE_OFFSET)        
@@ -356,13 +359,13 @@ async def sync_forecast():
         TD_RAIN = fc_data[i].fc_rain_chance
         TD_ICON = fc_data[i].fc_icon_descriptor
         TD_TEXT = fc_data[i].fc_short_text
-        validText = fc_data[i].fc_short_text 
         ON_LOW = fc_meta.fc_overnight_min
         TM_MAX = fc_data[i + 1].fc_temp_max
         TM_MIN = fc_data[i + 1].fc_temp_min
         TM_RAIN = fc_data[i + 1].fc_rain_chance
         TM_ICON = fc_data[i + 1].fc_icon_descriptor
         TM_TEXT = fc_data[i + 1].fc_short_text
+        validText = TM_TEXT
         print(f"TD: {TD_Y}{TD_M}{TD_D} Max:{TD_MAX} Min:{TD_MIN} {TD_TEXT}")
         print(f"TM: {TM_Y}{TM_M}{TM_D} Max:{TM_MAX} Min:{TM_MIN} {TM_TEXT}")
         if not validText == None:
@@ -401,10 +404,10 @@ async def update_temperature_display():
         print("update_temperature_display()")
         _, _, _, hh, _, _, _, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
         if hh < 4 or hh > 17:
-            str_onl = f"{ON_LOW}*C"
+            str_onl = f"{ON_LOW:02}*C"
             disp4H.show_string(str_onl)
         else:
-            str_tdy = f"{TD_MAX}*C"
+            str_tdy = f"{TD_MAX:02}*C"
             disp4H.show_string(str_tdy)
         str_tmr = f"{TM_MAX:02}*C"
         disp4L.show_string(str_tmr)
@@ -414,6 +417,7 @@ async def refresh_oleds():
     global REQUIRE_REFRESH
     while True:
         while not REQUIRE_REFRESH:
+            print("refresh_oleds() doesn't think the OLEDs need a refresh")
             await asyncio.sleep(60)
         
         # get the days of the week
@@ -429,13 +433,13 @@ async def refresh_oleds():
 
         # clear the screens and fill in the banners
         oledTL.fill(0)
-        oledTL.rect(0, 0, 128, 16, 1)
+        oledTL.fill_rect(0, 0, 128, 16, 1)
         oledBL.fill(0)
-        oledBL.rect(0, 0, 128, 16, 1)
+        oledBL.fill_rect(0, 0, 128, 16, 1)
         oledTR.fill(0)
-        oledTR.rect(0, 0, 128, 16, 1)
+        oledTR.fill_rect(0, 0, 128, 16, 1)
         oledBR.fill(0)
-        oledBR.rect(0, 0, 128, 16, 1)
+        oledBR.fill_rect(0, 0, 128, 16, 1)
 
         # top left
         date_header = f"{TD_D:02} {str_td_moy} {TD_Y:04}"
@@ -460,7 +464,7 @@ async def refresh_oleds():
         test_text = ezFBfont.split_text(TD_TEXT)
         oledTR12.write(test_text, halign="center", valign="center", y=34, x=90)
         if hh < 4 or hh > 17:
-            oledTR12.write("Overnight Low:", halign="left", y=54, x=55)
+            oledTR12.write("Overnight Low:", halign="left", y=54, x=50)
         else:
             oledTR12.write("Min:", halign="left", y=54, x=55)
             str_min = f"{TD_MIN:0}°C"
@@ -476,7 +480,7 @@ async def refresh_oleds():
         str_min = f"{TM_MIN:0}°C"
         oledBR16.write(str_min, halign="right", y=53, x=122)
 
-        print("refreshing OLEDs")
+        print("writing data to OLEDs")
         mux.select_port(OLED_ID_TL)
         oledTL.show()
         mux.select_port(OLED_ID_BL)
@@ -488,16 +492,19 @@ async def refresh_oleds():
 
         REQUIRE_REFRESH = False
 
-        await asyncio.sleep(60)
-
-async def refresh_right_oleds():
-    
-    # do something
-    test = 0
+        await asyncio.sleep(120)
 
 async def main():
-    await check_Wifi()
-    time.sleep(1)
+    try:
+        #wlan.disconnectWiFi()
+        wlan.scanWiFi()                                                                             # scan for the WLAN
+        wlan.connectWiFi()                                                                          # connect to the WLAN
+        print("WiFi Connected:", wlan.checkWiFi())                                                  # and double check
+    except:
+        disp8.set_string("Wifi Err", "r")
+        time.sleep(5)
+        machine.reboot()
+    
     await get_GPS_fix()                                                               # get an initial GPS fix
     time.sleep(1)
     await get_GPS_data()                                                              # populate the initial GPS data
@@ -509,37 +516,41 @@ async def main():
     print("geoHash: ", GEOHASH)
     time.sleep(1)
 
-    await get_location()
-    time.sleep(1)
-    # print("Location: ", C_LN, " [", C_LS,"]")
+    tasks = []
 
-    await get_forecast()
-    time.sleep(3)
-    # vF = f"Forecast: {TD_D:02}/{TD_M:02}/{TD_Y:04}"
-    # print("Forecast Date: ", vF)
-    await asyncio.sleep(7)
-    
-    asyncio.create_task(update_time_sync())
-    await asyncio.sleep(10)
+    tasks.append(asyncio.create_task(update_time_sync()))
+    await asyncio.sleep(5)
     print("Timezone Offset: ", TIMEZONE_OFFSET)
 
-    asyncio.create_task(update_clock_display())
-    await asyncio.sleep(10)
+    tasks.append(asyncio.create_task(update_clock_display()))
+    await asyncio.sleep(5)
     print("update_clock_display() has commenced.")
 
-    asyncio.create_task(update_temperature_display())
-    await asyncio.sleep(10)
-    print("update_temperature_display() has commenced.")
+    await get_location()
+    time.sleep(1)   
+    await get_forecast()
+    time.sleep(1)
+    await sync_forecast()
+    
+    tasks.append(asyncio.create_task(update_temperature_display()))
+    await asyncio.sleep(5)
+    # print("update_temperature_display() has commenced.")
 
-    asyncio.create_task(update_new_forecast_data())
-    await asyncio.sleep(10)
-    print("update_new_forecast_data() has commenced.")
+    tasks.append(asyncio.create_task(update_new_forecast_data()))
+    await asyncio.sleep(5)
+    # print("update_new_forecast_data() has commenced.")
 
-    await asyncio.sleep(10)
-    print("FORCE MANUAL UPDATE OF OLEDS!!!!!!! - NOT FOR PRODUCTION")
+    tasks.append(asyncio.create_task(refresh_oleds()))
+    await asyncio.sleep(5)
 
-    # tasks.append(asyncio.create_task(update_GPS_data()))
     print("ALL TASKS STARTED!")
+
+    result = None
+    try:
+        result = await asyncio.gather(*tasks, return_exceptions=True)
+    except asyncio.CancelledError:
+        print('Cancelled')
+    print('Result: ', result)
 
 disp8.set_brightness(15)                                        # TURN ON THE 8 DIGIT DISPLAY WITH MAX BRIGHTNESS
 disp4H.display_on(0)                                            # TURN ON THE UPPER 4 DIGIT DISPLAY WITH MAX BRIGHTNESS
@@ -547,101 +558,10 @@ disp4H.show_string("__*C")
 disp4L.display_on(0)
 disp4L.show_string("__*C")
 
-#wlan.disconnectWiFi()
-networks = wlan.scanWiFi()                                                                  # scan for the WLAN
-wlan.connectWiFi()                                                                          # connect to the WLAN
-print("WiFi Connected:", wlan.checkWiFi())                                                  # and double check
-
-asyncio.run(main())                                                   # start the main thing
-
-# try:
-#     main()
-# except Exception as e:
-#     print("Error in main loop. Pico will reboot!")
-#     print(e)
-#     time.sleep(5)
-#     print("Pico will reboot!")
-#     time.sleep(3)
-#     #machine.reset()
-
-print("If you can read this, it's gone wrong.")
-
-# while True:
-#     gps_data = GPS_obj.get_data()
-#     sat_string = (f"GPSSAT {gps_data.satellites}")
-#     disp8.set_string(sat_string, "l")
-#     if gps_data.has_fix == True:
-        
-#         print(f"GPS: {gps_data.year}{gps_data.month}{gps_data.day} {gps_data.hour}.{gps_data.minute}.{gps_data.second}")
-
-#         timezonetime = TimezoneInfo.update_localtime(gps_data.latitude,gps_data.longitude,(gps_data.year, gps_data.month, gps_data.day, gps_data.hour, gps_data.minute, gps_data.second))
-#         print(f"GPS: {gps_data.latitude} {gps_data.longitude}")
-#         print(TimezoneInfo.tz_offset_minutes)
-#         # DO NOT DELETE
-#         TIMEZONE_OFFSET = timezonetime.offset_minutes * 60
-
-#         # local_year, local_month, local_day, local_hour, local_minute, local_second = (timezonetime[k] for k in ['year','month','day','hour','minute','second'])
-#         # print(f"Austimezone: {local_year}{local_month}{local_day} {local_hour}.{local_minute}.{local_second}")
-#         # time.sleep(1)
-
-#         # yy, mm, dd, hr, mn, sc = (local_year, local_month, local_day, local_hour, local_minute, local_second)
-#         # epoch = time.mktime((yy, mm, dd, hr, mn, sc, 0, 0))
-#         # weekday = time.localtime(epoch)[6]
-
-#         epoch = time.mktime((gps_data.year, gps_data.month, gps_data.day, gps_data.hour, gps_data.minute, gps_data.second, 0, 0))
-#         weekday = time.localtime(epoch)[6]
-
-#         pico_rtc.datetime((gps_data.year, gps_data.month, gps_data.day, weekday, gps_data.hour, gps_data.minute, gps_data.second, 0))
-        
-#         rtc_year, rtc_month, rtc_day, rtc_wd, rtc_hour, rtc_minute, rtc_second, rtc_us = pico_rtc.datetime()
-#         print(f"RTC: {rtc_year}{rtc_month}{rtc_day} {rtc_hour}.{rtc_minute}.{rtc_second}")
-
-#         gh_output = Geohash.encode(gps_data.latitude, gps_data.longitude, precision=7)
-#         print(f"GeoHash: {gh_output}")
-
-#         BoMLocInfo.update_location(gh_output)
-#         print(f"Location: {BoMLocInfo.loc_name}")
-
-#         fc_meta, fc_data = BoMForecastInfo.update_forecast(gh_output)
-#         print(f"Day 0 Max: {fc_data[0].fc_temp_max}")
-#         print(f"Day 1 Max: {fc_data[1].fc_temp_max}")
-#         print(f"Day 2 Max: {fc_data[2].fc_temp_max}")
-#         time.sleep(1)
-
-#         break
-#     time.sleep(2)
-# while True:
-
-#     # y, m, d, wd, hh, mm, ss, us = pico_rtc.datetime()
-#     y, m, d, hh, mm, ss, wd, yd = now_local()
-#     # print(f"y: {y} m: {m} d: {d} wd: {wd} hh: {hh} mm: {mm} ss: {ss} wd: {wd} yd: {yd}")
-
-#     m_str = f"{d:02}.{m:02}"
-#     y_str = f"{y:04}"
-#     disp4H.show_string(m_str)
-#     disp4L.show_string(y_str)
-    
-#     # oledTL.fill(0)
-#     # oledTL.banner_text_inverted(ss * y)
-#     # oledTR.fill(0)
-#     # oledTR.banner_text(ss * m)
-#     # oledBL.fill(0)
-#     # oledBL.date_text(ss * d)
-#     # oledBR.fill(0)
-#     # oledBR.text_inverted(ss * hh, x=25,y=48)
-
-#     # mux.select_port(OLED_ID_TL)
-#     # oledTL.show()
-#     # mux.select_port(OLED_ID_TR)
-#     # oledTR.show()
-#     # mux.select_port(OLED_ID_BL)
-#     # oledBL.show()
-#     # mux.select_port(OLED_ID_BR)
-#     # oledBR.show()
-
-#     time_str = f"{hh:02} .{mm:02} .{ss:02}"
-#     disp8.set_string(time_str, "r")
-#     time.sleep(0.5)
-#     time_str = f"{hh:02} {mm:02} {ss:02}"
-#     disp8.set_string(time_str, "r")
-#     time.sleep(0.5)
+try:
+    asyncio.run(main())                                         # start the main thing
+except asyncio.CancelledError:
+    print('Cancelled')
+    asyncio.new_event_loop() 
+finally:
+    asyncio.new_event_loop()                                    # Clear retained state
