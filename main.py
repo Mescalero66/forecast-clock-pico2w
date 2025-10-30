@@ -137,7 +137,6 @@ async def check_Wifi():
         VALID_WIFI_CONNECTION = True
         return
     else:
-        disp8.set_string("Intrnet", "r")
         wlan.connectWiFi(retries=3, wait_per_try=5)
         if wlan.checkWiFi() == True:
             VALID_WIFI_CONNECTION = True
@@ -221,7 +220,7 @@ async def get_GPS_data():
     
     # get and set the timezone offset
     GPS_DATA = GPS_obj.get_data()
-    # print(f"Y{GPS_DATA.year} M{GPS_DATA.month} D{GPS_DATA.day} H{GPS_DATA.hour} M{GPS_DATA.minute} S{GPS_DATA.second}")
+    print(f"Y{GPS_DATA.year} M{GPS_DATA.month} D{GPS_DATA.day} H{GPS_DATA.hour} M{GPS_DATA.minute} S{GPS_DATA.second}")
     TimezoneInfo.update_localtime(GPS_DATA.latitude,GPS_DATA.longitude,(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second))
     TIMEZONE_OFFSET = TimezoneInfo.tz_offset_minutes * 60
     
@@ -344,11 +343,11 @@ async def sync_forecast():
         fc_meta, fc_data = BoMForecastInfo.fc_metadata, BoMForecastInfo.fc_current_data
         for idx in range(5):
             _, chkM, chkD, _, _, _, _, _ = TimeCruncher.parse_8601localtime(fc_data[idx].fc_date, TIMEZONE_OFFSET)
-            print(f"sync_forecast() is comparing {chkM} to {C_M}, and {chkD} to {C_D}")
+            # print(f"sync_forecast() is comparing {chkM} to {C_M}, and {chkD} to {C_D}")
             if (C_D == chkD) and (C_M == chkM):
                 i = idx
                 break  
-        print(f"sync_forecast() has identified the correct day as #{i}")
+        # print(f"sync_forecast() has identified the correct day as #{i}")
         if i == None:
             print(f"sync_forecast() has a forecast for {TimeCruncher.parse_8601localtime(fc_data[0].fc_date)}, but isn't today {C_D}/{C_M}/{C_Y}???")
             return
@@ -384,7 +383,7 @@ async def get_forecast():
     else:
         validText = None
         fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
-        print(f"get_forecast() got a valid response from the BoM at {fc_meta.fc_response_timestamp}")
+        # print(f"get_forecast() got a valid response from the BoM at {fc_meta.fc_response_timestamp}")
         print(f"get_forecast() has a valid forecast from the BoM that was issued at {fc_meta.fc_issue_time}")
         validText = fc_data[0].fc_short_text 
         if not validText == None:
@@ -417,7 +416,7 @@ async def refresh_oleds():
     global REQUIRE_REFRESH
     while True:
         while not REQUIRE_REFRESH:
-            print("refresh_oleds() doesn't think the OLEDs need a refresh")
+            # print("refresh_oleds() doesn't think the OLEDs need a refresh")
             await asyncio.sleep(60)
         
         # get the days of the week
@@ -459,7 +458,7 @@ async def refresh_oleds():
 
         # top right
         oledTRhead.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
-        icon = IconGrabber.get_icon(TD_ICON, 37, TIMEZONE_OFFSET)
+        icon = IconGrabber.get_icon(TD_ICON, 37, TIMEZONE_OFFSET, day=0)
         oledTR.display_pbm(icon, x_offset=5, y_offset=17)           
         test_text = ezFBfont.split_text(TD_TEXT)
         oledTR12.write(test_text, halign="center", valign="center", y=34, x=90)
@@ -472,7 +471,7 @@ async def refresh_oleds():
 
         # bottom right
         oledBRhead.write(C_LN, x=64, halign="center", y=1, fg=0, bg=1)
-        icon = IconGrabber.get_icon(TM_ICON, 37, TIMEZONE_OFFSET)
+        icon = IconGrabber.get_icon(TM_ICON, 37, TIMEZONE_OFFSET, day=1)
         oledBR.display_pbm(icon, x_offset=5, y_offset=17)
         test_text = ezFBfont.split_text(TM_TEXT)
         oledBR12.write(test_text, halign="center", valign="center", y=34, x=90)
@@ -480,7 +479,7 @@ async def refresh_oleds():
         str_min = f"{TM_MIN:0}°C"
         oledBR16.write(str_min, halign="right", y=53, x=122)
 
-        print("writing data to OLEDs")
+        # print("writing data to OLEDs")
         mux.select_port(OLED_ID_TL)
         oledTL.show()
         mux.select_port(OLED_ID_BL)
@@ -495,61 +494,37 @@ async def refresh_oleds():
         await asyncio.sleep(120)
 
 async def main():
-    try:
-        #wlan.disconnectWiFi()
-        wlan.scanWiFi()                                                                             # scan for the WLAN
-        wlan.connectWiFi()                                                                          # connect to the WLAN
-        print("WiFi Connected:", wlan.checkWiFi())                                                  # and double check
-    except:
-        disp8.set_string("Wifi Err", "r")
-        time.sleep(5)
-        machine.reboot()
-    
-    await get_GPS_fix()                                                               # get an initial GPS fix
-    time.sleep(1)
-    await get_GPS_data()                                                              # populate the initial GPS data
-    time.sleep(1)
-
-    if not VALID_GPS_DATA:
-        await get_GPS_data()                                                          # if the GPS data didn't make it, try one more time
-
-    print("geoHash: ", GEOHASH)
-    time.sleep(1)
-
     tasks = []
+    result = None
 
-    tasks.append(asyncio.create_task(update_time_sync()))
-    await asyncio.sleep(5)
-    print("Timezone Offset: ", TIMEZONE_OFFSET)
-
-    tasks.append(asyncio.create_task(update_clock_display()))
-    await asyncio.sleep(5)
-    print("update_clock_display() has commenced.")
-
-    await get_location()
-    time.sleep(1)   
-    await get_forecast()
-    time.sleep(1)
-    await sync_forecast()
+    if not startup_clock_display.done():
+        startup_clock_display.cancel()
+        try:
+            await startup_clock_display
+        except asyncio.CancelledError:
+            print("Startup version of update_clock_display() is cancelled.")
     
+    tasks.append(asyncio.create_task(update_clock_display()))
+    await asyncio.sleep(2)
+    
+    tasks.append(asyncio.create_task(update_time_sync()))
+    await asyncio.sleep(2)    
+
     tasks.append(asyncio.create_task(update_temperature_display()))
-    await asyncio.sleep(5)
-    # print("update_temperature_display() has commenced.")
+    await asyncio.sleep(2)
 
     tasks.append(asyncio.create_task(update_new_forecast_data()))
+    
     await asyncio.sleep(5)
-    # print("update_new_forecast_data() has commenced.")
-
     tasks.append(asyncio.create_task(refresh_oleds()))
-    await asyncio.sleep(5)
+    await asyncio.sleep(2)
 
-    print("ALL TASKS STARTED!")
+    print("ALL ONGOING TASKS STARTED!")
 
-    result = None
     try:
         result = await asyncio.gather(*tasks, return_exceptions=True)
     except asyncio.CancelledError:
-        print('Cancelled')
+        print("ONGOING TASKS LOOP CANCELLED")
     print('Result: ', result)
 
 disp8.set_brightness(15)                                        # TURN ON THE 8 DIGIT DISPLAY WITH MAX BRIGHTNESS
@@ -558,10 +533,62 @@ disp4H.show_string("__*C")
 disp4L.display_on(0)
 disp4L.show_string("__*C")
 
+# START UP PROCEDURE
+tasks = []
+
+asyncio.run(get_GPS_fix())
+
+while VALID_GPS_FIX is False:
+    print("Retry get_GPS_fix()")
+    time.sleep(1)
+    asyncio.run(get_GPS_fix())
+
+asyncio.run(get_GPS_data())
+
+while GEOHASH is None or TIMEZONE_OFFSET is None or C_Y is None:
+    print("Retry get_GPS_data()")
+    time.sleep(1)
+    asyncio.run(get_GPS_data())
+
+startup_clock_display = asyncio.create_task(update_clock_display())
+asyncio.sleep(1)
+
+asyncio.run(check_Wifi())
+
+while VALID_WIFI_CONNECTION is False:
+    print("Retry check_Wifi()")
+    disp4H.show_string("GEt")
+    disp4L.show_string("UIFI")
+    time.sleep(1)
+    asyncio.run(check_Wifi())
+
+asyncio.run(get_location())
+
+while VALID_LOCATION_DATA is False:
+    print("Retry get_location()")
+    time.sleep(1)
+    asyncio.run(get_location())
+
+asyncio.run(get_forecast())
+
+while VALID_FORECAST_DATA is False:
+    print("Retry get_forecast()")
+    time.sleep(1)
+    asyncio.run(get_forecast())
+
+asyncio.run(sync_forecast())
+
+while TD_TEXT is None:
+    print("Retry sync_forecast()")
+    time.sleep(1)
+    asyncio.run(get_forecast())
+    time.sleep(1)
+    asyncio.run(sync_forecast())
+
 try:
-    asyncio.run(main())                                         # start the main thing
+    asyncio.run(main())
 except asyncio.CancelledError:
-    print('Cancelled')
+    print('MAIN LOOP CANCELLED')
     asyncio.new_event_loop() 
 finally:
-    asyncio.new_event_loop()                                    # Clear retained state
+    asyncio.new_event_loop()
