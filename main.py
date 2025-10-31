@@ -165,9 +165,10 @@ async def get_GPS_fix():
             await asyncio.sleep(t)
             disp4H.show_string(" __=")
             await asyncio.sleep(t)
-            disp4H.show_string(" __ ")
+            disp4H.show_string(" ___")
             disp4L.show_string(" ~~>")
             await asyncio.sleep(t)
+            disp4H.show_string(" __ ")
             disp4L.show_string(" ~>=")
             await asyncio.sleep(t)
             disp4L.show_string(" ~# ")
@@ -179,6 +180,9 @@ async def get_GPS_fix():
             disp4L.show_string("=>~ ")
             await asyncio.sleep(t)
             disp4L.show_string(">~~ ")
+            await asyncio.sleep(t)
+            disp4H.show_string("___ ")
+            disp4L.show_string("~~~ ")
             await asyncio.sleep(t)
             disp4L.show_string(" ~~ ")
             disp4H.show_string("=__ ")
@@ -256,16 +260,34 @@ async def update_time_sync():
         if not VALID_GPS_DATA:
             print("update_time_sync() dreams of VALID_GPS_DATA...")
         else:
-            GPS_DATA = GPS_obj.get_data()
-            weekday = TimeCruncher.get_weekday(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day)
-            pico_rtc.datetime((GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, weekday, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second, 0))
-            if TIMEZONE_OFFSET == None:
-                TimezoneInfo.update_localtime(GPS_DATA.latitude,GPS_DATA.longitude,(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second))
-                TIMEZONE_OFFSET = TimezoneInfo.tz_offset_minutes * 60
-                print("update_time_sync() has re-calculated the TIMEZONE_OFFSET.")    
-            C_Y, C_M, C_D, _, _, _, C_WD, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
-            print("update_time_sync() has re-calculated the TIME.")  
-        await asyncio.sleep(55)
+            if GPS_obj.has_new_data:
+                gps_snap = GPS_obj.get_data()
+                fields = [gps_snap.year, gps_snap.month, gps_snap.day, gps_snap.hour, gps_snap.minute, gps_snap.second]
+                if any(f is None for f in fields) or any(f == 0 for f in fields):
+                    print("GPS snapshot invalid or incomplete - skipping RTC sync.")
+                    await asyncio.sleep(15)
+                    continue
+                gps_age_ms = None
+                if hasattr(GPS_obj, "last_data_time"):
+                    try:
+                        gps_age_ms = time.ticks_diff(time.ticks_ms(), GPS_obj.last_data_time)
+                    except Exception:
+                        pass
+                if gps_age_ms is not None and gps_age_ms > 3000:
+                    print(f"GPS data too old ({gps_age_ms} ms) - skipping RTC sync.")
+                    await asyncio.sleep(15)
+                    continue
+                weekday = TimeCruncher.get_weekday(gps_snap.year, gps_snap.month, gps_snap.day)
+                pico_rtc.datetime(gps_snap.year, gps_snap.month, gps_snap.day, weekday, gps_snap.hour, gps_snap.minute, gps_snap.second, 0)
+                print(f"RTC updated to {gps_snap.hour:02}:{gps_snap.minute:02}:{gps_snap.second:02} UTC")
+                if TIMEZONE_OFFSET == None:
+                    TimezoneInfo.update_localtime(GPS_DATA.latitude,GPS_DATA.longitude,(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second))
+                    TIMEZONE_OFFSET = TimezoneInfo.tz_offset_minutes * 60
+                    print("update_time_sync() has re-calculated the TIMEZONE_OFFSET.")    
+                C_Y, C_M, C_D, hh, mm, ss, C_WD, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
+                print(f"update_time_sync() has re-calculated the time as {hh:02} {mm:02} {ss:02}")
+                GPS_obj.has_new_data = False
+        await asyncio.sleep(15)
 
 async def update_new_forecast_data():
     await asyncio.sleep(10)
@@ -304,23 +326,27 @@ async def get_location():
 
 async def update_clock_display():
     while True:
-        y, m, d, hh, mm, ss, wd, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
+        _, _, _, hh, mm, ss, _, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
         time_str = f"{hh:02} .{mm:02} .{ss:02}"
         disp8.set_string(time_str, "r")
         await asyncio.sleep(0.2)
         time_str = f"{hh:02} {mm:02} {ss:02}"
+        # print(f"{hh:02} {mm:02} {ss:02}")
         disp8.set_string(time_str, "r")       
         await asyncio.sleep(0.8)
         if ss == 0:
+            y, m, d, _, _, _, wd, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
             asyncio.create_task(date_check(y, m, d, wd))
 
 async def date_check(y, m, d, wd):
     global C_Y, C_M, C_D, C_WD
     # global REQUIRE_REFRESH
     # print("date_check()")
-    if (y, m, d != C_Y, C_M, C_D):
+    if (y, m, d) != (C_Y, C_M, C_D):
+        print(f"date_check() thinks the date has changed. It was {C_Y}-{C_M}-{C_D}, now it's {y}-{m}-{d}")
         C_Y, C_M, C_D, C_WD = y, m, d, wd
         asyncio.create_task(sync_forecast())
+        await asyncio.sleep(5)
         # REQUIRE_REFRESH = True
     return
 
@@ -510,7 +536,7 @@ async def main():
 
     tasks.append(asyncio.create_task(update_new_forecast_data()))
     
-    await asyncio.sleep(5)
+    await asyncio.sleep(7)
     tasks.append(asyncio.create_task(refresh_oleds()))
     await asyncio.sleep(2)
 
@@ -548,12 +574,12 @@ while GEOHASH is None or TIMEZONE_OFFSET is None or C_Y is None:
 startup_clock_display = asyncio.create_task(update_clock_display())
 asyncio.sleep(1)
 
+disp4H.show_string("GEt")
+disp4L.show_string("UIFI")
 asyncio.run(check_Wifi())
 
 while VALID_WIFI_CONNECTION is False:
     print("Retry check_Wifi()")
-    disp4H.show_string("GEt")
-    disp4L.show_string("UIFI")
     time.sleep(1)
     asyncio.run(check_Wifi())
 
