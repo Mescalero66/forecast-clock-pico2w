@@ -82,7 +82,7 @@ TM_TEXT = None
 
 wlan = WLAN()                                                                               # create WLAN object
 
-pico_rtc = RTC()                                                                            # create Real Time Clock
+pico_rtc = machine.RTC()                                                                    # create Real Time Clock
 
 uart = UART(0, baudrate=9600, tx=Pin(PIN_UART_TX), rx=Pin(PIN_UART_RX))                     # Set up UART connection to GPS module
 i2c = I2C(0, scl=Pin(PIN_LED8_SCL), sda=Pin(PIN_LED8_SDA))                                  # Set up I2C connection
@@ -262,11 +262,10 @@ async def update_time_sync():
             if TIMEZONE_OFFSET == None:
                 TimezoneInfo.update_localtime(GPS_DATA.latitude,GPS_DATA.longitude,(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second))
                 TIMEZONE_OFFSET = TimezoneInfo.tz_offset_minutes * 60
-                print("update_time_sync() has re-calculated the TIMEZONE_OFFSET.")  
-            await asyncio.sleep(5)  
+                print("update_time_sync() has re-calculated the TIMEZONE_OFFSET.")    
             C_Y, C_M, C_D, _, _, _, C_WD, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
             print("update_time_sync() has re-calculated the TIME.")  
-        await asyncio.sleep(599)
+        await asyncio.sleep(55)
 
 async def update_new_forecast_data():
     await asyncio.sleep(10)
@@ -300,14 +299,10 @@ async def get_location():
             C_LS = LocationData.loc_state
             VALID_LOCATION_DATA = True
             REQUIRE_REFRESH = True
-            print("get_location() has updated the Location: ", C_LN, C_LS)
+            print("get_location() has an updated Location:", C_LN, C_LS)
     return
 
 async def update_clock_display():
-    global GPS_DATA
-    while TIMEZONE_OFFSET == None:
-        print("update_clock_display() dreams of a non-zero TIMEZONE_OFFSET...")
-        await asyncio.sleep(7)
     while True:
         y, m, d, hh, mm, ss, wd, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
         time_str = f"{hh:02} .{mm:02} .{ss:02}"
