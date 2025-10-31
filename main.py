@@ -445,8 +445,8 @@ async def refresh_oleds():
         str_tm_dow = DAYS_OF_WEEK[(C_WD + 1) % 7]
 
         # get the months of the year
-        str_td_moy = MONTHS_OF_YEAR[TD_M]
-        str_tm_moy = MONTHS_OF_YEAR[TM_M]
+        str_td_moy = MONTHS_OF_YEAR[TD_M - 1]
+        str_tm_moy = MONTHS_OF_YEAR[TM_M - 1]
 
         # get the hour of the day
         _, _, _, hh, _, _, _, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
@@ -484,7 +484,7 @@ async def refresh_oleds():
         test_text = ezFBfont.split_text(TD_TEXT)
         oledTR12.write(test_text, halign="center", valign="center", y=34, x=90)
         if hh < 4 or hh > 17:
-            oledTR12.write("Overnight Low:", halign="left", y=54, x=50)
+            oledTR12.write("Overnight Low:", halign="left", y=54, x=46)
         else:
             oledTR12.write("Min:", halign="left", y=54, x=55)
             str_min = f"{TD_MIN:0}°C"
