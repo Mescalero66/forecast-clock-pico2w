@@ -424,12 +424,12 @@ async def update_temperature_display():
         print("update_temperature_display()")
         _, _, _, hh, _, _, _, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
         if hh < 4 or hh > 17:
-            str_onl = f"{ON_LOW:02}*C"
+            str_onl = f"{ON_LOW}*C"
             disp4H.show_string(str_onl)
         else:
-            str_tdy = f"{TD_MAX:02}*C"
+            str_tdy = f"{TD_MAX}*C"
             disp4H.show_string(str_tdy)
-        str_tmr = f"{TM_MAX:02}*C"
+        str_tmr = f"{TM_MAX}*C"
         disp4L.show_string(str_tmr)
         await asyncio.sleep(300)
 
