@@ -46,6 +46,11 @@ TIMEZONE_OFFSET = None
 GEOHASH = None
 GPS_DATA = None
 
+MAX_FORECAST_DATA_AGE = 24 * 3600
+RETRY_TIME_NO_REPLY = 30 * 60
+LAST_ISSUE_TIME = None
+LAST_CONNECTION_TIME = None
+
 VALID_WIFI_CONNECTION = False
 VALID_GPS_FIX = False
 VALID_GPS_DATA = False
@@ -290,19 +295,39 @@ async def update_time_sync():
         await asyncio.sleep(15)
 
 async def update_new_forecast_data():
+    global LAST_ISSUE_TIME, LAST_CONNECTION_TIME
     await asyncio.sleep(10)
+    LAST_CONNECTION_TIME = time.time()
+    LAST_ISSUE_TIME = TimeCruncher.parse_8601datetime(BoMForecastInfo.fc_metadata.fc_issue_time)
     while True:
         print("update_new_forecast_data()")
         now = time.time()
         raw_next = BoMForecastInfo.fc_metadata.fc_next_issue_time or "2013-10-14T10:25:00Z"
         next = TimeCruncher.parse_8601datetime(raw_next)
-        waiting_time = max((next - now), 0)
-        print(f"update_new_forecast_data() thinks the next forecast update is {(waiting_time / 60):01} mins away.")
+        issue_time = TimeCruncher.parse_8601datetime(BoMForecastInfo.fc_metadata.fc_issue_time)
+        response_time = TimeCruncher.parse_8601datetime(BoMForecastInfo.fc_metadata.fc_response_timestamp)
+        # Update from the BoM's scheduled next forecast
         if now > next:
             print("update_new_forecast_data() suggests it's time for a new forecast.")
             asyncio.create_task(get_forecast())
             await asyncio.sleep(60)
-        await asyncio.sleep(waiting_time)
+            continue
+        # Update if there was no response from the server
+        if (now - LAST_CONNECTION_TIME) > RETRY_TIME_NO_REPLY:
+            print("update_new_forecast_data() didn't get a response from the BoM last time.")
+            asyncio.create_task(get_forecast())
+            await asyncio.sleep(60)
+            continue
+        # Update if the data is older than 24 hours
+        if (now - issue_time) > MAX_FORECAST_DATA_AGE:
+            print("update_new_forecast_data() has forecast data that's older than 24 hours.")
+            asyncio.create_task(get_forecast())
+            await asyncio.sleep(60)
+            continue
+    
+        waiting_time = min(next - now, MAX_FORECAST_DATA_AGE)
+        print(f"update_new_forecast_data() thinks the next forecast update is {(waiting_time / 60):01} mins away.")
+        await asyncio.sleep(max(waiting_time, 60))
 
 async def get_location():
     global GPS_DATA, C_LN, C_LS, VALID_LOCATION_DATA, REQUIRE_REFRESH
@@ -371,6 +396,7 @@ async def sync_forecast():
         # print(f"sync_forecast() has identified the correct day as #{i}")
         if i == None:
             print(f"sync_forecast() has a forecast for {TimeCruncher.parse_8601localtime(fc_data[0].fc_date)}, but isn't today {C_D}/{C_M}/{C_Y}???")
+            await get_forecast()
             return
         TD_Y, TD_M, TD_D, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[i].fc_date, TIMEZONE_OFFSET)
         TM_Y, TM_M, TM_D, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[i + 1].fc_date, TIMEZONE_OFFSET)        
@@ -396,20 +422,26 @@ async def sync_forecast():
             return
 
 async def get_forecast():
-    global VALID_FORECAST_DATA, REQUIRE_REFRESH
+    global VALID_FORECAST_DATA, REQUIRE_REFRESH, LAST_CONNECTION_TIME, LAST_ISSUE_TIME
     print("get_forecast()")
     if not GEOHASH:
         print("get_forecast() dreams of VALID_GEOHASH_DATA...")
         return
     else:
-        validText = None
-        fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
-        # print(f"get_forecast() got a valid response from the BoM at {fc_meta.fc_response_timestamp}")
-        print(f"get_forecast() has a valid forecast from the BoM that was issued at {fc_meta.fc_issue_time}")
-        validText = fc_data[0].fc_short_text 
-        if not validText == None:
+        try:
+            fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
+        except:
+            print("get_forecast() has failed to retrieve a valid forecast from the BoM")
+            await asyncio.sleep(10)
+            return
+        LAST_CONNECTION_TIME = TimeCruncher.parse_8601datetime(fc_meta.fc_response_timestamp)
+        new_issue = TimeCruncher.parse_8601datetime(fc_meta.fc_issue_time)
+        if new_issue != LAST_ISSUE_TIME:
+            print(f"get_forecast() has a valid forecast from the BoM that was issued at {fc_meta.fc_issue_time}")
+            LAST_ISSUE_TIME = new_issue
+        if not fc_data[0].fc_short_text == None:
             await sync_forecast()
-            await asyncio.sleep(5)
+            await asyncio.sleep(6)
             VALID_FORECAST_DATA = True
             REQUIRE_REFRESH = True
             print("get_forecast() has updated the forecast.")
