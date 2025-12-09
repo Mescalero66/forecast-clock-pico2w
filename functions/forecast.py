@@ -1,7 +1,7 @@
 import urequests
-import asyncio
 import json
 import time
+import functions.time_cruncher as TimeCruncher
 
 class LocationData:
     def __init__(self):
@@ -88,8 +88,20 @@ class BoMForecast:
         self.fc_current_data = [ForecastData() for _ in range(7)]
         
     def update_forecast(self, geoHash):
-        if self.fc_metadata.fc_geohash != geoHash or self.fc_current_data[0].fc_date == "":
+        now = time.time()
+        next = 0
+
+        try:
+            if self.fc_metadata.fc_next_issue_time:
+                next = TimeCruncher.parse_8601datetime(self.fc_metadata.fc_next_issue_time)
+        except Exception:
+            next = 0
+        
+        if (self.fc_metadata.fc_geohash != geoHash
+                or self.fc_current_data[0].fc_date == "" 
+                or now >= next):
             self.fc_metadata, self.fc_current_data = self.parse_forecast_json(geoHash)
+            
             return self.fc_metadata, self.fc_current_data
         else:
             # if the location hasn't changed, and we have existing data, and we haven't passed the next issue time, don't get the JSON again.

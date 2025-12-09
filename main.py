@@ -297,10 +297,10 @@ async def update_time_sync():
 async def update_new_forecast_data():
     global LAST_ISSUE_TIME, LAST_CONNECTION_TIME
     await asyncio.sleep(10)
-    LAST_CONNECTION_TIME = time.time()
-    LAST_ISSUE_TIME = TimeCruncher.parse_8601datetime(BoMForecastInfo.fc_metadata.fc_issue_time)
     while True:
         print("update_new_forecast_data()")
+        LAST_CONNECTION_TIME = time.time()
+        LAST_ISSUE_TIME = TimeCruncher.parse_8601datetime(BoMForecastInfo.fc_metadata.fc_issue_time)
         now = time.time()
         raw_next = BoMForecastInfo.fc_metadata.fc_next_issue_time or "2013-10-14T10:25:00Z"
         next = TimeCruncher.parse_8601datetime(raw_next)
@@ -455,7 +455,7 @@ async def update_temperature_display():
     while True:
         print("update_temperature_display()")
         _, _, _, hh, _, _, _, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
-        if hh < 4 or hh > 17:
+        if hh < 4 or hh > 18:
             str_onl = f"{ON_LOW}*C"
             disp4H.show_string(str_onl)
         else:
@@ -515,7 +515,7 @@ async def refresh_oleds():
         oledTR.display_pbm(icon, x_offset=5, y_offset=17)           
         test_text = ezFBfont.split_text(TD_TEXT)
         oledTR12.write(test_text, halign="center", valign="center", y=34, x=90)
-        if hh < 4 or hh > 17:
+        if hh < 4 or hh > 18:
             oledTR12.write("Overnight Low:", halign="left", y=54, x=46)
         else:
             oledTR12.write("Min:", halign="left", y=54, x=55)
