@@ -21,8 +21,8 @@
  - https://github.com/trickypr/bom-weather-docs/tree/main
  - https://github.com/peterhinch/micropython-async/blob/master/v3/docs/TUTORIAL.md
 
- - https://api.weather.bom.gov.au/v1/locations/r1r0mgn/
- - https://api.weather.bom.gov.au/v1/locations/r1r0mgn/forecasts/daily
+ - https://api.weather.bom.gov.au/v1/locations/r1r1mgn/
+ - https://api.weather.bom.gov.au/v1/locations/r1r1mgn/forecasts/daily
 
  - https://reg.bom.gov.au/info/forecast_icons.shtml
 
