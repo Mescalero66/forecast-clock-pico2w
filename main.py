@@ -370,9 +370,10 @@ async def date_check(y, m, d, wd):
     if (y, m, d) != (C_Y, C_M, C_D):
         print(f"date_check() thinks the date has changed. It was {C_Y}-{C_M}-{C_D}, now it's {y}-{m}-{d}")
         C_Y, C_M, C_D, C_WD = y, m, d, wd
+        await asyncio.sleep(1)
         asyncio.create_task(sync_forecast())
-        await asyncio.sleep(5)
-        # REQUIRE_REFRESH = True
+        await asyncio.sleep(4)
+        #REQUIRE_REFRESH = True
     return
 
 async def sync_forecast():
@@ -414,8 +415,8 @@ async def sync_forecast():
         validText = TM_TEXT
         print(f"TD: {TD_Y}{TD_M}{TD_D} Max:{TD_MAX} Min:{TD_MIN} {TD_TEXT}")
         print(f"TM: {TM_Y}{TM_M}{TM_D} Max:{TM_MAX} Min:{TM_MIN} {TM_TEXT}")
+        REQUIRE_REFRESH = True
         if not validText == None:
-            REQUIRE_REFRESH = True
             print("sync_forecast() has synced the forecast.")
         else:
             print("sync_forecast() has failed to sync the current forecast to the current day.")
@@ -439,6 +440,7 @@ async def get_forecast():
         if new_issue != LAST_ISSUE_TIME:
             print(f"get_forecast() has a valid forecast from the BoM that was issued at {fc_meta.fc_issue_time}")
             LAST_ISSUE_TIME = new_issue
+            REQUIRE_REFRESH = True
         if not fc_data[0].fc_short_text == None:
             await sync_forecast()
             await asyncio.sleep(6)
