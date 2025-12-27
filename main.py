@@ -364,6 +364,7 @@ async def update_clock_display():
             asyncio.create_task(date_check(y, m, d, wd))
 
 async def date_check(y, m, d, wd):
+    global REQUIRE_REFRESH
     global C_Y, C_M, C_D, C_WD
     # global REQUIRE_REFRESH
     # print("date_check()")
@@ -372,8 +373,8 @@ async def date_check(y, m, d, wd):
         C_Y, C_M, C_D, C_WD = y, m, d, wd
         await asyncio.sleep(1)
         asyncio.create_task(sync_forecast())
-        await asyncio.sleep(4)
-        #REQUIRE_REFRESH = True
+        await asyncio.sleep(5)
+        REQUIRE_REFRESH = True
     return
 
 async def sync_forecast():
@@ -384,6 +385,7 @@ async def sync_forecast():
     i = None
     validText = None
     if not VALID_FORECAST_DATA:
+        REQUIRE_REFRESH = True
         print("sync_forecast() dreams of VALID_FORECAST_DATA...")
         return
     else:
@@ -433,7 +435,7 @@ async def get_forecast():
             fc_meta, fc_data = BoMForecastInfo.update_forecast(GEOHASH)
         except:
             print("get_forecast() has failed to retrieve a valid forecast from the BoM")
-            await asyncio.sleep(10)
+            await asyncio.sleep(2)
             return
         LAST_CONNECTION_TIME = TimeCruncher.parse_8601datetime(fc_meta.fc_response_timestamp)
         new_issue = TimeCruncher.parse_8601datetime(fc_meta.fc_issue_time)
@@ -486,6 +488,7 @@ async def refresh_oleds():
         _, _, _, hh, _, _, _, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
 
         # clear the screens and fill in the banners
+        mux.select_port(OLED_ID_TL
         oledTL.fill(0)
         oledTL.fill_rect(0, 0, 128, 16, 1)
         oledBL.fill(0)
