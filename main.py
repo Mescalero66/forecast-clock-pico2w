@@ -81,7 +81,7 @@ TM_RAIN = None
 TM_ICON = None
 TM_TEXT = None
 ## EVENT QUEUE
-OLED_EVENT_QUEUE = deque(maxlen=10)
+OLED_EVENT_QUEUE = deque((), 10)
 ## EVENTS
 EV_STARTUP = 1
 EV_TIME_TICK = 2
@@ -486,7 +486,8 @@ async def oled_refresh_scheduler():
     while True:
         now = time.time()
         if now - last_render > MAX_REFRESH:
-            OLED_EVENT_QUEUE.clear()
+            while OLED_EVENT_QUEUE:
+                OLED_EVENT_QUEUE.popleft()
             await render_oleds()
             last_render = now
             continue
@@ -494,7 +495,8 @@ async def oled_refresh_scheduler():
             if now - last_render < MIN_REFRESH:
                 await asyncio.sleep(MIN_REFRESH)
                 continue
-            OLED_EVENT_QUEUE.clear()
+            while OLED_EVENT_QUEUE:
+                OLED_EVENT_QUEUE.popleft()
             await render_oleds()
             last_render = now
             continue
@@ -677,7 +679,9 @@ async def main():
     tasks.append(asyncio.create_task(update_new_forecast_data()))
     
     await asyncio.sleep(7)
-    tasks.append(asyncio.create_task(refresh_oleds()))
+    # tasks.append(asyncio.create_task(refresh_oleds()))
+    tasks.append(asyncio.create_task(oled_refresh_scheduler()))
+    # tasks.append(asyncio.create_task(render_oleds()))
     await asyncio.sleep(2)
 
     print("ALL ONGOING TASKS STARTED!")
