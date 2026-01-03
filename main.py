@@ -222,15 +222,11 @@ async def get_GPS_data():
         print("get_GPS_data() awaits a GPS fix.....")
         await get_GPS_fix()
     
-    # get the data
-    # GPS_DATA = GPS_obj.get_data()
-    # print(f"Lat: [{GPS_DATA.latitude}] Long: [{GPS_DATA.longitude}] Alt: [{GPS_DATA.altitude}]")
-
     # this is the showstopper for getting a valid initial set of data:
     while GPS_DATA.latitude == None or GPS_DATA.longitude == None or GPS_DATA.latitude == 0.0 or GPS_DATA.longitude == 0.0:
         await asyncio.sleep(1)
         GPS_DATA = GPS_obj.get_data()
-        print(f"Lat: [{GPS_DATA.latitude}] Long: [{GPS_DATA.longitude}] Alt: [{GPS_DATA.altitude}]")
+    print(f"Lat: [{GPS_DATA.latitude}] Long: [{GPS_DATA.longitude}] Alt: [{GPS_DATA.altitude}]")
         
     # get and set the geohash
     GPS_DATA = GPS_obj.get_data()
@@ -241,14 +237,14 @@ async def get_GPS_data():
     pico_rtc.datetime((GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, weekday, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second, 0))
     
     # get and set the timezone offset
-    GPS_DATA = GPS_obj.get_data()
+    # GPS_DATA = GPS_obj.get_data()
     print(f"Y{GPS_DATA.year} M{GPS_DATA.month} D{GPS_DATA.day} H{GPS_DATA.hour} M{GPS_DATA.minute} S{GPS_DATA.second}")
     TimezoneInfo.update_localtime(GPS_DATA.latitude,GPS_DATA.longitude,(GPS_DATA.year, GPS_DATA.month, GPS_DATA.day, GPS_DATA.hour, GPS_DATA.minute, GPS_DATA.second))
     TIMEZONE_OFFSET = TimezoneInfo.tz_offset_minutes * 60
     
     # get and set the local date
-    C_Y, C_M, C_D, _, _, _, C_WD, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
-    # print(f"LY{C_Y} LM{C_M} LD{C_D} LWD{C_WD}")
+    C_Y, C_M, C_D, hhh, mmm, sss, C_WD, _ = TimeCruncher.now_local(TIMEZONE_OFFSET)
+    # print(f"LY{C_Y} LM{C_M} LD{C_D} isDST{TimezoneInfo.tz_data.is_DST} LHH{hhh} MM{mmm} LSS{sss} LWD{C_WD}")
     
     if not GPS_DATA.year == None:
         VALID_GPS_DATA = True

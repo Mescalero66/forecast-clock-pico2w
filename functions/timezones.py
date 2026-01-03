@@ -97,6 +97,19 @@ class LocalTimezone:
                     break
             return (Y,M,D,hh,mm,ss)
 
+        def utc_transition_times(check_year):           
+            season_end_year = check_year + 1
+           
+            # DST start: first Sunday Oct, 02:00 standard time
+            s_year, s_month, s_day = first_sunday_on_or_after(check_year, 10, 1)
+            s_utc = add_minutes((s_year, s_month, s_day, 2, 0, 0), -base_offset)
+
+            # DST end: first Sunday Apr, 03:00 daylight time
+            e_year, e_month, e_day = first_sunday_on_or_after(season_end_year, 4, 1)
+            e_utc = add_minutes((e_year, e_month, e_day, 3, 0, 0), -(base_offset + dst_add))
+
+            return s_utc, e_utc
+
         # ---- zone selection (coarse but practical) ----
         # Mainland longitude bands (approx):
         #   WA: 112.9E–129E  -> UTC+8
@@ -177,66 +190,33 @@ class LocalTimezone:
             uses_dst = True
             lh_half_hour_dst = False
 
-            # ---- DST calculation (for zones that observe it) ----
-            # Rules: First Sunday in October 02:00 local STANDARD time
-            #        to First Sunday in April   03:00 local DAYLIGHT time
-            is_dst = False
-            if uses_dst:
-                # Find transition instants in local time, then compare properly using UTC.
-                # 1) Start: Oct first Sunday 02:00 STANDARD -> that equals 02:00 - base_offset in UTC.
-                sY, sM, sD = first_sunday_on_or_after(Y, 10, 1)
-                # 2) End: Apr first Sunday 03:00 DAYLIGHT -> that equals 03:00 - (base_offset + dst_add) in UTC.
-                eY, eM, eD = first_sunday_on_or_after(Y, 4, 1)
+        # ---- DST calculation (for zones that observe it) ----
+        # Rules: First Sunday in October 02:00 local STANDARD time
+        #        to First Sunday in April   03:00 local DAYLIGHT time
+        is_dst = False
+        if uses_dst:
+            # Find transition instants in local time, then compare properly using UTC.
+            # 1) Start: Oct first Sunday 02:00 STANDARD -> that equals 02:00 - base_offset in UTC.
+            sY, sM, sD = first_sunday_on_or_after(Y, 10, 1)
+            # 2) End: Apr first Sunday 03:00 DAYLIGHT -> that equals 03:00 - (base_offset + dst_add) in UTC.
+            eY, eM, eD = first_sunday_on_or_after(Y, 4, 1)
 
-                dst_add = 30 if lh_half_hour_dst else 60  # minutes added during DST
-
-                # Compute the two UTC transition timestamps (as tuples), careful with years:
-                # If UTC date is between Jan and Mar, the relevant DST season started last year.
-                # We’ll compute both candidate seasons and test.
-
-        def utc_transition_times(utc_year):
-            # # Start of DST in local standard time (year Oct)
-            # s_loc = (year, 10, first_sunday_on_or_after(year,10,1)[2], 2, 0, 0)
-            # s_utc = add_minutes(s_loc, -base_offset)
-            # # End of DST in local daylight time (next year Apr)
-            # e_year = year + 1
-            # e_loc = (e_year, 4, first_sunday_on_or_after(e_year,4,1)[2], 3, 0, 0)
-            # e_utc = add_minutes(e_loc, -(base_offset + dst_add))
-            # return s_utc, e_utc
+            dst_add = 30 if lh_half_hour_dst else 60  # minutes added during DST
             
-            if utc_month := utc_dt[1] >= 7:
-                # Current date after July → season is Oct this year → Apr next year
-                season_start_year = utc_year
-                season_end_year = utc_year + 1
-            else:
-                # Current date before July → season is Oct last year → Apr this year
-                season_start_year = utc_year - 1
-                season_end_year = utc_year
+            # Determine which season bracket to check
+            # If month >= July, use this year's Oct start; else use last year's Oct start.
+            check_year = Y if M >= 7 else (Y - 1)
+            start_utc, end_utc = utc_transition_times(check_year)
 
-            # DST start: first Sunday Oct, 02:00 standard time
-            s_year, s_month, s_day = first_sunday_on_or_after(season_start_year, 10, 1)
-            s_utc = add_minutes((s_year, s_month, s_day, 2, 0, 0), -base_offset)
+            # Compare utc_dt with [start_utc, end_utc)
+            def cmp(a, b):
+                return (a > b) - (a < b)
+            def le(a, b): return cmp(a,b) <= 0
+            def lt(a, b): return cmp(a,b) < 0
+            def ge(a, b): return cmp(a,b) >= 0
 
-            # DST end: first Sunday Apr, 03:00 daylight time
-            e_year, e_month, e_day = first_sunday_on_or_after(season_end_year, 4, 1)
-            e_utc = add_minutes((e_year, e_month, e_day, 3, 0, 0), -(base_offset + dst_add))
-
-            return s_utc, e_utc
-
-        # Determine which season bracket to check
-        # If month >= July, use this year's Oct start; else use last year's Oct start.
-        check_year = Y if M >= 7 else (Y - 1)
-        start_utc, end_utc = utc_transition_times(check_year)
-
-        # Compare utc_dt with [start_utc, end_utc)
-        def cmp(a, b):
-            return (a > b) - (a < b)
-        def le(a, b): return cmp(a,b) <= 0
-        def lt(a, b): return cmp(a,b) < 0
-        def ge(a, b): return cmp(a,b) >= 0
-
-        if ge(utc_dt, start_utc) and lt(utc_dt, end_utc):
-            is_dst = True
+            if ge(utc_dt, start_utc) and lt(utc_dt, end_utc):
+                is_dst = True
 
         offset_minutes = base_offset + ((30 if lh_half_hour_dst else 60) if is_dst else 0)
 
@@ -251,8 +231,7 @@ class LocalTimezone:
         self.tz_data.local_day = lD
         self.tz_data.local_hour = lhh
         self.tz_data.local_minute = lmm
-        self.tz_data.local_second = lss
-
+        self.tz_data.local_second = lss    
         return self.tz_data
     
     @property
