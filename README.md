@@ -30,6 +30,8 @@
  
 ### Functions
 **THIS IS A DOGS BREAKFAST**
+| Function | Description |
+| --- | --- |
 | def oled_event(event): | event handler - not useful |
 | async def check_Wifi(): | checks if wifi is connected, attempts to connect if it isn't |
 | async def get_GPS_fix(): | checks if GPS has a fix. if not, continually refreshes the GPS_obj until it has_fix |
@@ -47,3 +49,5 @@
 | async def render_oleds(): | ONCE OFF VERSION - gets the correct data, and renders the 4 screens to be sent to the OLEDs |
 | async def refresh_oleds(): | EVERY 2 MINUTES LOOP - gets the correct data, and renders the 4 screens to be sent to the OLEDs |
 | async def main(): | starts the tasks in the correct order, then awaits them finishing (forever) |
+
+## Order of Operations
