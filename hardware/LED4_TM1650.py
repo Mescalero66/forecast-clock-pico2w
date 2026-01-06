@@ -63,7 +63,8 @@ characterBytes = [
     0x61,  # [42] lowercase 'c' upper
     0x01,  # [43] tilde for top segment only
     0x41,  # [44] equals but high
-    0x49   # [45] three dash
+    0x49,  # [45] three dash
+    0x7E   # [46] W for WIFI
 ]
 
 digitAddress = [
@@ -384,6 +385,8 @@ class LED4digdisp:
             return 44
         if c == "#":        # three dash
             return 45
+        if c == "&":        # W for Wifi
+            return 46
 
         # Digits 0–9
         if "0" <= c <= "9":

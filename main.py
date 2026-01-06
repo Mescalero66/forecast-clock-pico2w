@@ -702,7 +702,7 @@ startup_clock_display = asyncio.create_task(update_clock_display())
 asyncio.sleep(1)
 
 disp4H.show_string("GEt")
-disp4L.show_string("UIFI")
+disp4L.show_string("&IFI")
 asyncio.run(check_Wifi())
 
 while VALID_WIFI_CONNECTION is False:

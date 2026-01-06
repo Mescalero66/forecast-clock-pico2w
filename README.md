@@ -31,20 +31,20 @@
 
 ## Functions
 **THIS IS A DOGS BREAKFAST**
-| Startup RO | Main RO | Function | Description |
+| Start RO | Main RO | Function | Description |
 | --- | --- | --- | --- |
-| `1` | | async def get_GPS_fix(): | checks if GPS has a fix. if not, continually refreshes the GPS_obj until it has_fix |
-| `2` | | async def get_GPS_data(): | checks if GPS has a fix. if yes, gets a fresh set of GPS_data, calculates the Geohash, gets the time and sets the Pico's internal clock, calculates local time from the timezone offset, sets the local date. |
-| `3` | `1`| async def update_clock_display(): | updates the main clock display every second |
-| `4` | | async def check_Wifi(): | checks if wifi is connected, attempts to connect if it isn't |
-| `5` | | async def get_location(): | checks if GPS has a fix. if yes, uses the Geohash to resolve a Location Name and State. |
-| `6` | | async def get_forecast(): | gets new forecast data from the BoM |
-| `7` | | async def sync_forecast(): | attempts to read the forecast data on hand in terms of the current day, and current day plus one, and then updates all of the constants with the relevant data |
-| `8` | `0` | async def main(): | starts the tasks in the correct order, then awaits them finishing (forever) |
-| | `2` | async def update_time_sync(): | checks if the GPS_obj has new data, and that the data is not too old (30 sec). If it isn't, calculate the weekeday and set the pico's clock. calculate the local time and update the date  and time constants |
-| | `3` | async def update_temperature_display(): | updates the 2 temperature LED displays, with alternate for overnight low |
-| | `4` | async def update_new_forecast_data(): | checks the forecast data issue time to determine if an update is required / scheduled. If it is, get_forecast() is called |
-| | `5` | async def oled_refresh_scheduler(): | attempts to schedule refreshing of OLEDs based on various criteria - doesn't work very well |
+|  `1`  | | async def get_GPS_fix(): | checks if GPS has a fix. if not, continually refreshes the GPS_obj until it has_fix |
+|  `2`  | | async def get_GPS_data(): | checks if GPS has a fix. if yes, gets a fresh set of GPS_data, calculates the Geohash, gets the time and sets the Pico's internal clock, calculates local time from the timezone offset, sets the local date. |
+|  `3`  |  `1`  | async def update_clock_display(): | updates the main clock display every second |
+|  `4`  | | async def check_Wifi(): | checks if wifi is connected, attempts to connect if it isn't |
+|  `5`  | | async def get_location(): | checks if GPS has a fix. if yes, uses the Geohash to resolve a Location Name and State. |
+|  `6`  | | async def get_forecast(): | gets new forecast data from the BoM |
+|  `7`  | | async def sync_forecast(): | attempts to read the forecast data on hand in terms of the current day, and current day plus one, and then updates all of the constants with the relevant data |
+|  `8`  |  `0`  | async def main(): | starts the tasks in the correct order, then awaits them finishing (forever) |
+| |  `2`  | async def update_time_sync(): | checks if the GPS_obj has new data, and that the data is not too old (30 sec). If it isn't, calculate the weekeday and set the pico's clock. calculate the local time and update the date  and time constants |
+| |  `3`  | async def update_temperature_display(): | updates the 2 temperature LED displays, with alternate for overnight low |
+| |  `4`  | async def update_new_forecast_data(): | checks the forecast data issue time to determine if an update is required / scheduled. If it is, get_forecast() is called |
+| |  `5`  | async def oled_refresh_scheduler(): | attempts to schedule refreshing of OLEDs based on various criteria - doesn't work very well |
 | | | async def date_check(y, m, d, wd): | checks if the date has ticked over to a new day. If yes, calls sync_forecast() |
 | | | async def render_oleds(): | ONCE OFF VERSION - gets the correct data, and renders the 4 screens to be sent to the OLEDs |
 | | | async def refresh_oleds(): | EVERY 2 MINUTES LOOP - gets the correct data, and renders the 4 screens to be sent to the OLEDs |
@@ -53,13 +53,17 @@
 
 
 ## Data Requirements and Update Frequency
-| No | Data | Dependencies | Refresh Interval |
+| No | Data / Function | Dependencies | Startup / Refresh Interval |
 | --- | --- | --- | --- |
-| `1` |  |  |  |  |
-| `1` |  |  |  |  |
-| `1` |  |  |  |  |
-| `1` |  |  |  |  |
-| `1` |  |  |  |  |
-| `1` |  |  |  |  |
-| `1` |  |  |  |  |
-| `1` |  |  |  |  |
+|  `1`  | **FLAG_GPS_HAS_FIX** |  | S |
+|  `2`  | **GPS_DATASET** | FLAG_GPS_HAS_FIX | S |
+|  `3`  | **GEOHASH** | GPS_DATASET | S |
+|  `4`  | Pico Internal Clock | GPS_DATASET | S |
+|  `5`  | **TIMEZONE_OFFSET** | GPS_DATASET | S |
+|  `6`  | **update_clock_display()** | Local Time | **`1`** second |
+|  `7`  | WiFi Connection |  | S |
+|  `8`  | **NAME_LOCATION**<br>**NAME_STATE** | GEOHASH<br>WiFi Connection | S |
+|  `9`  | **BOM_FORECAST_DATA** | GEOHASH<br>WiFi Connection | S<br>**`21600`** seconds<br>or BoM forecast<br>issue interval |
+|  `10`  | **update_temp_displays()** | BOM_FORECAST_DATA | **`900`** seconds<br>or via FLAG_UPDATE |
+|  `11`  | **update_oleds()** | BOM_FORECAST_DATA | **`1800`** seconds<br>>or via FLAG_UPDATE |
+|  `12`  | Pico Internal Clock | GPS_DATASET | **`3600`** seconds<br>>or via FLAG_UPDATE |
