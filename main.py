@@ -142,7 +142,6 @@ disp4L.show_string("__*C")
 def oled_event(event):
     OLED_EVENT_QUEUE.append((event, time.time()))
 
-
 async def check_Wifi():
     global VALID_WIFI_CONNECTION
     VALID_WIFI_CONNECTION = False
@@ -309,7 +308,6 @@ async def update_new_forecast_data():
         raw_next = BoMForecastInfo.fc_metadata.fc_next_issue_time or "2013-10-14T10:25:00Z"
         next = TimeCruncher.parse_8601datetime(raw_next)
         issue_time = TimeCruncher.parse_8601datetime(BoMForecastInfo.fc_metadata.fc_issue_time)
-        response_time = TimeCruncher.parse_8601datetime(BoMForecastInfo.fc_metadata.fc_response_timestamp)
         # Update from the BoM's scheduled next forecast
         if now > next:
             print("update_new_forecast_data() suggests it's time for a new forecast.")
