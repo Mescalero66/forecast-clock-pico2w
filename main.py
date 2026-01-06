@@ -86,19 +86,14 @@ TM_ICON = None
 TM_TEXT = None
 
 wlan = WLAN()                                                                               # create WLAN object
-
 pico_rtc = machine.RTC()                                                                    # create Real Time Clock
-
 uart = UART(0, baudrate=9600, tx=Pin(PIN_UART_TX), rx=Pin(PIN_UART_RX))                     # Set up UART connection to GPS module
 i2c = I2C(0, scl=Pin(PIN_LED8_SCL), sda=Pin(PIN_LED8_SDA))                                  # Set up I2C connection
- 
 mux = I2CMultiplex(ADDR_MUX, I2Cbus=1, scl_pin=PIN_MUX_SCL, sda_pin=PIN_MUX_SDA)            # Set up I2C multiplexer
-
 GPS_obj = GPSReader(uart)                                                                   # Create a GPS reader object   
 disp8 = HT16K33LED(i2c)                                                                     # Create 8digit LED object
 disp4H = LED4digdisp(1, PIN_LED4H_SCL, PIN_LED4H_SDA)                                       # Create 4digit LED object (HIGH)         
 disp4L = LED4digdisp(2, PIN_LED4L_SCL, PIN_LED4L_SDA)                                       # Create 4digit LED object (LOW)
-
 BoMLocInfo = BoMData.BoMLocation()                                                          # Create the BoM Location data structure
 BoMForecastInfo = BoMData.BoMForecast()                                                     # Create the BoM Forecast data structure
 TimezoneInfo = AusTimeZones.LocalTimezone()                                                 # Create the Timezone data structure
@@ -110,7 +105,6 @@ oledTL12 = ezFBfont(oledTL, spleen12)
 oledTL16 = ezFBfont(oledTL, spleen16)
 oledTL23 = ezFBfont(oledTL, spleen23)
 oledTLhead = ezFBfont(oledTL, helvetica15bold, hgap=2)
-
 mux.select_port(OLED_ID_TR)
 oledTR = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
 oledTR8 = ezFBfont(oledTR, spleen8)
@@ -118,7 +112,6 @@ oledTR12 = ezFBfont(oledTR, spleen12)
 oledTR16 = ezFBfont(oledTR, spleen16)
 oledTR23 = ezFBfont(oledTR, spleen23)
 oledTRhead = ezFBfont(oledTR, helvetica15bold, hgap=2)
-
 mux.select_port(OLED_ID_BL)
 oledBL = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
 oledBL8 = ezFBfont(oledBL, spleen8)
@@ -126,7 +119,6 @@ oledBL12 = ezFBfont(oledBL, spleen12)
 oledBL16 = ezFBfont(oledBL, spleen16)
 oledBL23 = ezFBfont(oledBL, spleen23)
 oledBLhead = ezFBfont(oledBL, helvetica15bold, hgap=2)
-
 mux.select_port(OLED_ID_BR)
 oledBR = SSD1306_I2C(OLED_RES_X, OLED_RES_Y, mux.i2c)
 oledBR8 = ezFBfont(oledBR, spleen8)
