@@ -1,7 +1,5 @@
 # A simple library for parsing NMEA GPS data from UART GPS modules
-
 import time
-import asyncio
 
 class GPSData:
     """Class to store GPS data with easy attribute access"""

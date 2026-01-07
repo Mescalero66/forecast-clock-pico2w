@@ -24,7 +24,7 @@ def get_weekday(GPSy, GPSm, GPSd):
     J = y // 100
     weekday = (d + (13*(m+1))//5 + K + K//4 + J//4 + 5*J) % 7
     weekday = (weekday + 6) % 7
-    return weekday
+    return weekday - 1
 
 def parse_8601datetime(ts: str) -> int:
     try:
