@@ -60,7 +60,7 @@
 |  `3`  | ***update_display_clock()*** | Local RTC | **`1`** second | *ongoing* |
 |  `4`  | ***enable_Wifi()*** |  | S | wlan_obj.isconnected (True/False) |
 |  `5`  | ***get_location()*** | **_geohash**<br>wlan connection | S | **_locCity**, <br>**_locState** |
-|  `+`  | ***get_forecast_data()*** | **_geohash**, <br>>wlan connection | **`86,400`** seconds (24hrs)<br>or BoM bulletin older than **`46,800`** seconds (13hrs)<br>or BoM bulletin update interval | **_lastRefresh**, <br>**_forecastMeta**, <br>**_forecastData**  |
+|  `+`  | ***get_forecast_data()*** | **_geohash**, <br>wlan connection | **`86,400`** seconds (24hrs)<br>or BoM bulletin older than **`46,800`** seconds (13hrs)<br>or BoM bulletin update interval | **_lastRefresh**, <br>**_forecastMeta**, <br>**_forecastData**  |
 |  `7`  | ***update_forecast()*** | **_forecastMeta**, <br>**_forecastData**, <br> **_timezoneOffset** | **`3,600`** seconds (1hr)<br>or on request | **_lastRefresh**, <br>**_updateMetadata**, <br> **_forecastToday**, <br> **_forecastTomorrow**  |
 |  `8`  | ***update_display_temps()*** | **_todayMax**, <br>**_overnighLow**, <br>**_tomorrowMax** | **`900`** seconds<br>or on request | **_lastRefresh** |
 |  `9`  | ***update_display_oleds()*** | **_forecastToday**, <br> **_forecastTomorrow**, <br>**_locCity** | **`1800`** seconds<br>>or on request | **_lastRefresh** |

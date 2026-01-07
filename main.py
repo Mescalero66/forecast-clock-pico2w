@@ -424,15 +424,19 @@ async def main_loop(_geohash, _timezoneOffset, _locCity, _locState):
 
 async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
     # get the initial set of forecast data
-    initial_forecast = asyncio.create_task(get_forecast_data(_geohash, _timezoneOffset))
-    lastForecastRefresh, _updateMetadata, _forecastToday, _forecastTomorrow = await initial_forecast
+    firstForecastData = asyncio.create_task(get_forecast_data(_geohash))
+    lastForecastDataRefresh, _forecastMeta, _forecastData = await firstForecastData
+    await asyncio.sleep(0.5)
+    # match the data to the current date
+    firstForecastSync = asyncio.create_task(update_forecast(_forecastMeta, _forecastData, _timezoneOffset))
+    lastForecastSync, _updateMetadata, _forecastToday, _forecastTomorrow = await firstForecastSync
     await asyncio.sleep(0.5)
     # update the display_temps and the display_oleds (almost) immediately
-    first_led = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
-    lastLedRefresh = await first_led
+    firstLedRefresh = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
+    lastLedRefresh = await firstLedRefresh
     await asyncio.sleep(0.5)
-    first_oled = asyncio.create_task(update_display_oleds(_forecastToday, _forecastTomorrow, _locCity))
-    lastOledRefresh = await first_oled
+    firstOledRefresh = asyncio.create_task(update_display_oleds(_forecastToday, _forecastTomorrow, _locCity))
+    lastOledRefresh = await firstOledRefresh
     await asyncio.sleep(0.5)
     # schedule synchronise_watches
     lastSynchroniseWatches = time.mktime(localRTC.datetime())
@@ -441,21 +445,31 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
         now = time.mktime(localRTC.datetime())
         y, m, d, _, hh, mm, ss, _ = localRTC.datetime()
         await asyncio.sleep(0.5)
-        if ((now - lastForecastRefresh) >= 86400) or ((now - _updateMetadata["bulletin_time"]) >= 46800) or (now >= _updateMetadata["bulletin_next"]):
-            forecast = asyncio.create_task(update_forecast(_geohash, _timezoneOffset))
-            lastForecastRefresh, _updateMetadata, _forecastToday, _forecastTomorrow = await forecast
+        if ((now - lastForecastDataRefresh) >= 86400) or ((now - _updateMetadata["bulletin_time"]) >= 46800) or (now >= _updateMetadata["bulletin_next"]):
+            forecast = asyncio.create_task(get_forecast_data(_geohash))
+            lastForecastDataRefresh, _forecastMeta, _forecastData = await forecast
+            new_bulletin = True
         await asyncio.sleep(0.5)
-        if (now - lastOledRefresh) >= 1800:
+        if ((now - lastForecastSync) >= 300) or (new_bulletin == True):
+            forecastSync = asyncio.create_task(update_forecast(_forecastMeta, _forecastData, _timezoneOffset))
+            lastForecastSync, _updateMetadata, _forecastToday, _forecastTomorrow = await forecastSync
+        elif (_forecastToday["yy"] != y) or (_forecastToday["mm"] != m) or (_forecastToday["dd"] != d):
+            forecastSync = asyncio.create_task(update_forecast(_forecastMeta, _forecastData, _timezoneOffset))
+            lastForecastSync, _updateMetadata, _forecastToday, _forecastTomorrow = await forecastSync
+            new_bulletin = True
+        await asyncio.sleep(0.5)
+        if ((now - lastOledRefresh) >= 1800) or (new_bulletin == True):
             oleds = asyncio.create_task(update_display_oleds(_forecastToday, _forecastTomorrow, _locCity))
             lastLedRefresh = await oleds
         await asyncio.sleep(0.5)
-        if (now - lastSynchroniseWatches) >= 1440:
+        if ((now - lastSynchroniseWatches) >= 1440):
             sync = asyncio.create_task(synchronise_watches())
             lastSynchroniseWatches = await sync
         await asyncio.sleep(0.5)
-        if (now - lastLedRefresh) >= 900:
+        if ((now - lastLedRefresh) >= 900) or (new_bulletin == True):
             temps = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
             lastLedRefresh = await temps
+        new_bulletin = False
         await asyncio.sleep(60)        
 
 ### STARTUP PROCESSES
