@@ -161,6 +161,12 @@ class GPSReader:
         """Get the current GPS date - split"""
         self.update()
         return self.current_data.day, self.current_data.month, self.current_data.year
+    
+    @property
+    def date_ymd(self):
+        """Get the current GPS date - split"""
+        self.update()
+        return self.current_data.year, self.current_data.month, self.current_data.day
 
 # For backward compatibility
 def parse_gps_data(nmea_chunk):

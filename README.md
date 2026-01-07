@@ -53,17 +53,14 @@
 
 
 ## Data Requirements and Update Frequency
-| No | Data / Function | Dependencies | Startup / <br>Refresh Interval | Returns |
+| No | Data / Function | Dependencies | Startup / <br> Interval | Returns |
 | --- | --- | --- | --- | --- |
-|  `1`  | get_GPS_fix() |  | S | when GPS_obj.has_fix = True, returns True |
-|  `2`  | **GPS_DATASET** | FLAG_GPS_HAS_FIX | S |  |
-|  `3`  | **GEOHASH** | GPS_DATASET | S |  |
-|  `4`  | Pico Internal Clock | GPS_DATASET | S |  |
-|  `5`  | **TIMEZONE_OFFSET** | GPS_DATASET | S |  |
-|  `6`  | **update_clock_display()** | Local Time | **`1`** second |  |
-|  `7`  | WiFi Connection |  | S |  |
-|  `8`  | **NAME_LOCATION**<br>**NAME_STATE** | GEOHASH<br>WiFi Connection | S |  |
-|  `9`  | **BOM_FORECAST_DATA** | GEOHASH<br>WiFi Connection | S<br>**`21600`** seconds<br>or BoM forecast<br>issue interval |  |
-|  `10`  | **update_temp_displays()** | BOM_FORECAST_DATA | **`900`** seconds<br>or via FLAG_UPDATE |  |
-|  `11`  | **update_oleds()** | BOM_FORECAST_DATA | **`1800`** seconds<br>>or via FLAG_UPDATE |  |
-|  `12`  | Pico Internal Clock | GPS_DATASET | **`3600`** seconds<br>>or via FLAG_UPDATE |  |
+|  `1`  | ***get_GPS_fix()*** |  | S | when GPS_obj.has_fix = True, returns **True** |
+|  `2`  | ***system_setup()*** | GPS_obj.has_fix = True | S | **_geohash**, <br>utcRTC set, <br> **_timezoneOffset**, <br> localRTC set |
+|  `3`  | ***update_display_clock()*** | Local RTC | **`1`** second | *ongoing* |
+|  `4`  | ***enable_Wifi()*** |  | S | wlan_obj.isconnected (True/False) |
+|  `5`  | ***get_location()*** | **_geohash**<br>wlan connection | S | **_locCity**, <br>**_locState** |
+|  `6`  | ***update_forecast()*** | **_geohash**, <br>**_timezoneOffset**, <br>wlan connection | **`21600`** seconds<br>or BoM forecast<br>issue interval | **_updateMetadata**, <br> **_forecastToday**, <br> **_forecastTomorrow**  |
+|  `7`  | ***update_display_temps()*** | **_todayMax**, <br>**_overnighLow**, <br>**_tomorrowMax** | **`900`** seconds<br>or on request | **_lastRefresh** |
+|  `8`  | ***update_display_oleds()*** | **_forecastToday**, <br> **_forecastTomorrow**, <br>**_locCity** | **`1800`** seconds<br>>or on request | **_lastRefresh** |
+|  `9`  | ***synchronise_watches()*** | GPS_obj.has_fix = True | **`3600`** seconds or on request | **_lastRefresh** |
