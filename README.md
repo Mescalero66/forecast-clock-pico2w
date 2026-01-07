@@ -53,17 +53,17 @@
 
 
 ## Data Requirements and Update Frequency
-| No | Data / Function | Dependencies | Startup / Refresh Interval |
-| --- | --- | --- | --- |
-|  `1`  | **FLAG_GPS_HAS_FIX** |  | S |
-|  `2`  | **GPS_DATASET** | FLAG_GPS_HAS_FIX | S |
-|  `3`  | **GEOHASH** | GPS_DATASET | S |
-|  `4`  | Pico Internal Clock | GPS_DATASET | S |
-|  `5`  | **TIMEZONE_OFFSET** | GPS_DATASET | S |
-|  `6`  | **update_clock_display()** | Local Time | **`1`** second |
-|  `7`  | WiFi Connection |  | S |
-|  `8`  | **NAME_LOCATION**<br>**NAME_STATE** | GEOHASH<br>WiFi Connection | S |
-|  `9`  | **BOM_FORECAST_DATA** | GEOHASH<br>WiFi Connection | S<br>**`21600`** seconds<br>or BoM forecast<br>issue interval |
-|  `10`  | **update_temp_displays()** | BOM_FORECAST_DATA | **`900`** seconds<br>or via FLAG_UPDATE |
-|  `11`  | **update_oleds()** | BOM_FORECAST_DATA | **`1800`** seconds<br>>or via FLAG_UPDATE |
-|  `12`  | Pico Internal Clock | GPS_DATASET | **`3600`** seconds<br>>or via FLAG_UPDATE |
+| No | Data / Function | Dependencies | Startup / <br>Refresh Interval | Returns |
+| --- | --- | --- | --- | --- |
+|  `1`  | **FLAG_GPS_HAS_FIX** |  | S |  |
+|  `2`  | **GPS_DATASET** | FLAG_GPS_HAS_FIX | S |  |
+|  `3`  | **GEOHASH** | GPS_DATASET | S |  |
+|  `4`  | Pico Internal Clock | GPS_DATASET | S |  |
+|  `5`  | **TIMEZONE_OFFSET** | GPS_DATASET | S |  |
+|  `6`  | **update_clock_display()** | Local Time | **`1`** second |  |
+|  `7`  | WiFi Connection |  | S |  |
+|  `8`  | **NAME_LOCATION**<br>**NAME_STATE** | GEOHASH<br>WiFi Connection | S |  |
+|  `9`  | **BOM_FORECAST_DATA** | GEOHASH<br>WiFi Connection | S<br>**`21600`** seconds<br>or BoM forecast<br>issue interval |  |
+|  `10`  | **update_temp_displays()** | BOM_FORECAST_DATA | **`900`** seconds<br>or via FLAG_UPDATE |  |
+|  `11`  | **update_oleds()** | BOM_FORECAST_DATA | **`1800`** seconds<br>>or via FLAG_UPDATE |  |
+|  `12`  | Pico Internal Clock | GPS_DATASET | **`3600`** seconds<br>>or via FLAG_UPDATE |  |
