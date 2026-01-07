@@ -450,7 +450,7 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
             lastForecastDataRefresh, _forecastMeta, _forecastData = await forecast
             new_bulletin = True
         await asyncio.sleep(0.5)
-        if ((now - lastForecastSync) >= 300) or (new_bulletin == True):
+        if ((now - lastForecastSync) >= 600) or (new_bulletin == True):
             forecastSync = asyncio.create_task(update_forecast(_forecastMeta, _forecastData, _timezoneOffset))
             lastForecastSync, _updateMetadata, _forecastToday, _forecastTomorrow = await forecastSync
         elif (_forecastToday["yy"] != y) or (_forecastToday["mm"] != m) or (_forecastToday["dd"] != d):
