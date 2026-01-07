@@ -210,7 +210,7 @@ async def synchronise_watches():
 
 async def update_display_clock():
     while True:
-        _, _, _, hh, mm, ss, _, _ = localRTC.datetime()
+        _, _, _, _, hh, mm, ss, _ = localRTC.datetime()
         time_str = f"{hh:02} .{mm:02} .{ss:02}"
         disp8.set_string(time_str, "r")
         await asyncio.sleep(0.2)
@@ -228,24 +228,24 @@ async def get_location(_geohash):
     print(f"Location: {_locCity}, {_locState}, Australia")
     return _locCity, _locState
 
-async def update_forecast(_geohash, _timezoneOffset):
+async def get_forecast_data(_geohash):
     try:
         await asyncio.sleep(0.5)
         # attempt to connect to the BoM and return the daily forecast data for the given geohash
-        fc_meta, fc_data = BoMForecastInfo.update_forecast(_geohash)
+        _forecastMeta, _forecastData = BoMForecastInfo.update_forecast(_geohash)
         await asyncio.sleep(0.5)
     except Exception as e:
-        print(f"update_forecast() failed to retrieve new data from the BoM: {e} - {repr(e)}")
+        print(f"get_forecast_data() failed to retrieve new data from the BoM: {e} - {repr(e)}")
         await asyncio.sleep(0.5)
         return False
-    # collect some metadata about the update
-    timestamp_response = TimeCruncher.parse_8601datetime(fc_meta.fc_response_timestamp)
-    timestamp_bulletin = TimeCruncher.parse_8601datetime(fc_meta.fc_issue_time)
-    timestamp_next = TimeCruncher.parse_8601datetime(fc_meta.fc_next_issue_time)
+    _lastRefresh = time.mktime(localRTC.datetime())
+    return _lastRefresh, _forecastMeta, _forecastData
+
+async def update_forecast(_forecastMeta, _forecastData, _timezoneOffset):
     _updateMetadata = {
-        "response_time": timestamp_response,
-        "bulletin_time": timestamp_bulletin,
-        "bulletin_next": timestamp_next
+        "response_time": (TimeCruncher.parse_8601datetime(_forecastMeta.fc_response_timestamp)),
+        "bulletin_time": (TimeCruncher.parse_8601datetime(_forecastMeta.fc_issue_time)),
+        "bulletin_next": (TimeCruncher.parse_8601datetime(_forecastMeta.fc_next_issue_time))
     }
     # get current local date
     lclY, lclM, lclD, _, _, _, _, _ = localRTC.datetime()
@@ -253,7 +253,7 @@ async def update_forecast(_geohash, _timezoneOffset):
     i = None
     try:
         for x in range(7):
-            chkY, chkM, chkD, _, _, _, _, _ = TimeCruncher.parse_8601localtime(fc_data[x].fc_date, _timezoneOffset)
+            chkY, chkM, chkD, _, _, _, _, _ = TimeCruncher.parse_8601localtime(_forecastData[x].fc_date, _timezoneOffset)
             print(f"update_forecast() is comparing [{chkY}/{lclY}], [{chkM}/{lclM}], and [{chkD}/{lclD}]")
             if (chkY == lclY) and (chkM == lclM) and (chkD == lclD):
                 i = x
@@ -264,35 +264,35 @@ async def update_forecast(_geohash, _timezoneOffset):
         return False
     # if i is still not set by this point, there is a date mismatch between the current system date and the data from the BoM
     if i == None:
-        print(f"update_forecast() has forecast data for {TimeCruncher.parse_8601localtime(fc_data[0].fc_date, _timezoneOffset)}, but isn't today {localRTC.datetime()}?")
+        print(f"update_forecast() has forecast data for {TimeCruncher.parse_8601localtime(_forecastData[0].fc_date, _timezoneOffset)}, but isn't today {localRTC.datetime()}?")
         return False
     await asyncio.sleep(0.5)
     # attempt to collect the correct data into return dictionary
     try:
-        tdY, tdM, tdD, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[i].fc_date, _timezoneOffset)
+        tdY, tdM, tdD, _, _, _, _, _  = TimeCruncher.parse_8601localtime(_forecastData[i].fc_date, _timezoneOffset)
         _forecastToday = {
             "yy": tdY,
             "mm": tdM,
             "dd": tdD,
-            "max": fc_data[i].fc_temp_max,
-            "min": fc_data[i].fc_temp_min, 
-            "rain": fc_data[i].fc_rain_chance,
-            "icon": fc_data[i].fc_icon_descriptor,
-            "text": fc_data[i].fc_short_text,
-            "onlow": fc_meta.fc_overnight_min
+            "max": _forecastData[i].fc_temp_max,
+            "min": _forecastData[i].fc_temp_min, 
+            "rain": _forecastData[i].fc_rain_chance,
+            "icon": _forecastData[i].fc_icon_descriptor,
+            "text": _forecastData[i].fc_short_text,
+            "onlow": _forecastData.fc_overnight_min
         }
         j = i + 1
-        tmY, tmM, tmD, _, _, _, _, _  = TimeCruncher.parse_8601localtime(fc_data[j].fc_date, _timezoneOffset)
+        tmY, tmM, tmD, _, _, _, _, _  = TimeCruncher.parse_8601localtime(_forecastData[j].fc_date, _timezoneOffset)
         _forecastTomorrow = {
             "yy": tmY,
             "mm": tmM,
             "dd": tmD,
-            "max": fc_data[j].fc_temp_max,
-            "min": fc_data[j].fc_temp_min, 
-            "rain": fc_data[j].fc_rain_chance,
-            "icon": fc_data[j].fc_icon_descriptor,
-            "text": fc_data[j].fc_short_text,
-            "onlow": fc_meta.fc_overnight_min
+            "max": _forecastData[j].fc_temp_max,
+            "min": _forecastData[j].fc_temp_min, 
+            "rain": _forecastData[j].fc_rain_chance,
+            "icon": _forecastData[j].fc_icon_descriptor,
+            "text": _forecastData[j].fc_short_text,
+            "onlow": _forecastData.fc_overnight_min
         }
     except Exception as e:
         print(f"update_forecast() failed to organise the BoM data into the correct structure: {e} - {repr(e)}")
@@ -302,7 +302,8 @@ async def update_forecast(_geohash, _timezoneOffset):
     # print some forecast data
     print(f"Today {_forecastToday['yy']}-{_forecastToday['mm']}-{_forecastToday['dd']} Max:{_forecastToday['max']}°C Min:{_forecastToday['min']}°C Rain:{_forecastToday['rain']}% ({_forecastToday['text']})")
     print(f"Tomor {_forecastTomorrow['yy']}-{_forecastTomorrow['mm']}-{_forecastTomorrow['dd']} Max:{_forecastTomorrow['max']}°C Min:{_forecastTomorrow['min']}°C Rain:{_forecastTomorrow['rain']}% ({_forecastTomorrow['text']})")
-    return _updateMetadata, _forecastToday, _forecastTomorrow
+    _lastRefresh = time.mktime(localRTC.datetime())
+    return _lastRefresh, _updateMetadata, _forecastToday, _forecastTomorrow
 
 async def update_display_temps(_todayMax, _overnighLow, _tomorrowMax):
     _, _, _, _, hh, _, _, _ =  localRTC.datetime()
@@ -401,23 +402,69 @@ async def update_display_oleds(_forecastToday, _forecastTomorrow, _locCity):
     _lastRefresh = time.mktime(localRTC.datetime())
     return _lastRefresh
 
-async def main_loop():
+async def main_loop(_geohash, _timezoneOffset, _locCity, _locState):
     ongoing_tasks = []
     result = None
-
+    # kill the startup version of the clock display task
+    if not startupClock.done():
+        startupClock.cancel()
+        try:
+            await startupClock
+        except asyncio.CancelledError:
+            print("Startup version of update_display_clock() is cancelled.")
+    # start ongoing updates of the clock display
+    ongoing_tasks.append(asyncio.create_task(update_display_clock()))
+    # start ongoing refresh scheduler loop
+    ongoing_tasks.append(asyncio.create_task(refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState)))
     try:
         result = await asyncio.gather(*ongoing_tasks, return_exceptions=True)
     except asyncio.CancelledError:
         print("ONGOING TASKS LOOP CANCELLED")
     print("Result: ", result)
 
+async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
+    # get the initial set of forecast data
+    initial_forecast = asyncio.create_task(get_forecast_data(_geohash, _timezoneOffset))
+    lastForecastRefresh, _updateMetadata, _forecastToday, _forecastTomorrow = await initial_forecast
+    await asyncio.sleep(0.5)
+    # update the display_temps and the display_oleds (almost) immediately
+    first_led = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
+    lastLedRefresh = await first_led
+    await asyncio.sleep(0.5)
+    first_oled = asyncio.create_task(update_display_oleds(_forecastToday, _forecastTomorrow, _locCity))
+    lastOledRefresh = await first_oled
+    await asyncio.sleep(0.5)
+    # schedule synchronise_watches
+    lastSynchroniseWatches = time.mktime(localRTC.datetime())
+    # then, run this forever
+    while True:
+        now = time.mktime(localRTC.datetime())
+        y, m, d, _, hh, mm, ss, _ = localRTC.datetime()
+        await asyncio.sleep(0.5)
+        if ((now - lastForecastRefresh) >= 86400) or ((now - _updateMetadata["bulletin_time"]) >= 46800) or (now >= _updateMetadata["bulletin_next"]):
+            forecast = asyncio.create_task(update_forecast(_geohash, _timezoneOffset))
+            lastForecastRefresh, _updateMetadata, _forecastToday, _forecastTomorrow = await forecast
+        await asyncio.sleep(0.5)
+        if (now - lastOledRefresh) >= 1800:
+            oleds = asyncio.create_task(update_display_oleds(_forecastToday, _forecastTomorrow, _locCity))
+            lastLedRefresh = await oleds
+        await asyncio.sleep(0.5)
+        if (now - lastSynchroniseWatches) >= 1440:
+            sync = asyncio.create_task(synchronise_watches())
+            lastSynchroniseWatches = await sync
+        await asyncio.sleep(0.5)
+        if (now - lastLedRefresh) >= 900:
+            temps = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
+            lastLedRefresh = await temps
+        await asyncio.sleep(60)        
+
 ### STARTUP PROCESSES
 # first, get a GPS fix (function won't return until has_fix is True)
 asyncio.run(get_GPS_fix())
 # then, proceed with system setup
 _geohash, _timezoneOffset = asyncio.run(system_setup())
-# at this point, we can display the clock (ongoing)
-asyncio.create_task(update_display_clock())
+# at this point, we can display the clock (until the main loop starts)
+startupClock = asyncio.create_task(update_display_clock())
 # attempt to connect to WiFi
 disp4H.show_string("GEt")
 disp4L.show_string("&IFI")
