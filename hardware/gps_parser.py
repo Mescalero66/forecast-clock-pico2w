@@ -1,6 +1,7 @@
 # A simple library for parsing NMEA GPS data from UART GPS modules
 
 import time
+import asyncio
 
 class GPSData:
     """Class to store GPS data with easy attribute access"""
@@ -32,40 +33,29 @@ class GPSReader:
         self.last_data_time = time.ticks_ms()
         self.timeout_ms = 500  # 500ms timeout between message parts
         self.current_data = GPSData()
+        self.new_data = GPSData()
         self.has_new_data = False
     
     def update(self):
         """Check for new GPS data and process it - non-blocking version"""
         self.has_new_data = False
-        current_time = time.ticks_ms()
-        
-        # Check if timeout occurred with data in buffer
-        if time.ticks_diff(current_time, self.last_data_time) > self.timeout_ms and self.message_buffer:
-            self._process_buffer()
-            self.has_new_data = True
-        
-        # Check if new data is available - only read what's currently available
-        bytes_available = self.uart.any()
-        if bytes_available > 0:
+        if self.uart.any():
             try:
-                # Read ONLY the currently available data - this is the key non-blocking change
-                data = self.uart.read(bytes_available).decode('utf-8')
-                
-                # If buffer is empty or we recently received data, append to buffer
-                if not self.message_buffer or time.ticks_diff(current_time, self.last_data_time) <= self.timeout_ms:
-                    self.message_buffer += data
-                else:
-                    # If timeout occurred, process the old buffer first
+                data = self.uart.read(self.uart.any()).decode('utf-8')
+                self.message_buffer += data
+                while '\n' in self.message_buffer:
+                    line, self.message_buffer = self.message_buffer.split('\n', 1)
+                    line = line.strip()
+                    # Ignore junk / partial lines
+                    if not line.startswith('$'):
+                        continue
+                    # Hand off complete sentence
+                    self.message_buffer = line
                     self._process_buffer()
-                    # Then start a new buffer
-                    self.message_buffer = data
+                    self.message_buffer = ""
                     self.has_new_data = True
-                
-                # Update last data time
-                self.last_data_time = current_time
             except Exception as e:
                 print(f"Error reading GPS data: {e}")
-        
         return self.has_new_data
     
     def get_data(self):
@@ -84,10 +74,12 @@ class GPSReader:
         if not self.message_buffer:
             return
         
-        self.current_data = _process_nmea_data(self.message_buffer)
+        self.new_data = _process_nmea_data(self.message_buffer)
+        if self.new_data.has_fix == True:
+            self.current_data = self.new_data
         self.message_buffer = ""
     
-    # Convenience properties for direct access to GPS data
+    # Properties for direct access to GPS data
     @property
     def latitude(self):
         """Get the current latitude"""
@@ -176,7 +168,7 @@ def parse_gps_data(nmea_chunk):
 def _process_nmea_data(nmea_data):
     """Process a complete NMEA data string"""
     # Initialize data class
-    gps_data = GPSData()
+    new_data = GPSData()
     
     # Split the chunk into individual NMEA sentences
     sentences = nmea_data.strip().split('$')
@@ -191,15 +183,15 @@ def _process_nmea_data(nmea_data):
         
         # Parse different sentence types
         if sentence.startswith('$GPRMC'):
-            _parse_rmc(sentence, gps_data)
+            _parse_rmc(sentence, new_data)
         elif sentence.startswith('$GPGGA'):
-            _parse_gga(sentence, gps_data)
+            _parse_gga(sentence, new_data)
         elif sentence.startswith('$GPGSA'):
-            _parse_gsa(sentence, gps_data)
+            _parse_gsa(sentence, new_data)
         #elif sentence.startswith('$GPGSV'):     # TO DO
-        #    _parse_gsa(sentence, gps_data)
+        #    _parse_gsa(sentence, new_data)
     
-    return gps_data
+    return new_data
 
 def _parse_rmc(sentence, gps_data):
     """Parse RMC sentence for time, date, location, and speed"""
@@ -236,7 +228,7 @@ def _parse_rmc(sentence, gps_data):
         try:
             day = parts[9][0:2]
             month = parts[9][2:4]
-            year = "20" + parts[9][4:6]  # Assuming we're in the 2000s
+            year = int("20" + parts[9][4:6])  # Assuming we're in the 2000s
             gps_data.date = f"{day}/{month}/{year}"
             gps_data.day = int(day)
             gps_data.month = int(month)

@@ -148,28 +148,33 @@ async def system_setup():
         # ensuring that we have the coordinates before anything else happens
         GPS_obj.get_data()
         await asyncio.sleep(1)
-    print(f"Lat: [{GPS_obj.latitude}] Long: [{GPS_obj.longitude}] Alt: [{GPS_obj.altitude}]")
+    print(f"Lat: [{GPS_obj.current_data.latitude}] Long: [{GPS_obj.current_data.longitude}] Alt: [{GPS_obj.current_data.altitude}]")
     # get geohash code from GPS coordinates
-    _geohash = Geohash.encode(float(GPS_obj.latitude), float(GPS_obj.longitude), precision=7)
-    print(f"gH: [{_geohash}]")
+    _geohash = Geohash.encode(float(GPS_obj.current_data.latitude), float(GPS_obj.current_data.longitude), precision=7)
+    print(f"geohash: [{_geohash}]")
     await asyncio.sleep(0.5)
     # calculate day_of_week, required to set the Pico internal clock (UTC)
-    day_of_week = TimeCruncher.get_weekday(GPS_obj.date_ymd)
+    y, m, d = GPS_obj.current_data.year, GPS_obj.current_data.month, GPS_obj.current_data.day
+    day_of_week = TimeCruncher.get_weekday(y, m, d)
     await asyncio.sleep(0.5)
     # set the UTC clock time from GPS data
-    utcRTC.datetime((GPS_obj.date_ymd), day_of_week, (GPS_obj.time_split), 0)
+    y, m, d = GPS_obj.current_data.year, GPS_obj.current_data.month, GPS_obj.current_data.day
+    hh, mm, ss = GPS_obj.current_data.hour, GPS_obj.current_data.minute, GPS_obj.current_data.second
+    utcRTC.datetime((y, m, d, day_of_week, hh, mm, ss, 0))
     await asyncio.sleep(0.5)
     # get the (UTC) datetime we just set and display it
     utcY, utcM, utcD, _, utcHr, utcMn, utcSc, _ = utcRTC.datetime()
     print(f"UTC: Y{utcY} M{utcM} D{utcD} H{utcHr} M{utcMn} S{utcSc}")
     await asyncio.sleep(0.5)
     # calculate the local time from the GPS coordinates and UTC time
-    tziData = TimezoneInfo.update_localtime(GPS_obj.latitude, GPS_obj.longitude,((GPS_obj.date_ymd), (GPS_obj.time_split)))
+    tziData = TimezoneInfo.update_localtime(float(GPS_obj.current_data.latitude), float(GPS_obj.current_data.longitude), (utcY, utcM, utcD, utcHr, utcMn, utcSc))
+    print(f"Tzi: Y{tziData.local_year} M{tziData.local_month} D{tziData.local_day} H{tziData.local_hour} M{tziData.local_minute} S{tziData.local_second}")
     await asyncio.sleep(0.5)
     # set timezone offset (in seconds)
     _timezoneOffset = TimezoneInfo.tz_offset_minutes * 60
+    print(f"Tzo: {TimezoneInfo.tz_offset_minutes}mins [{TimezoneInfo.tz_data.zone_id}] DST:{TimezoneInfo.tz_data.is_DST}")
     # set the local clock time from the converted local time from TimezoneInfo
-    localRTC.datetime(tziData.local_year, tziData.local_month, tziData.local_day, day_of_week, tziData.local_hour, tziData.local_minute, tziData.local_second, 0)
+    localRTC.datetime((tziData.local_year, tziData.local_month, tziData.local_day, day_of_week, tziData.local_hour, tziData.local_minute, tziData.local_second, 0))
     await asyncio.sleep(0.5)
     # get the (Local) datetime we just set and display it
     lclY, lclM, lclD, _, lclHr, lclMn, lclSc, _ = localRTC.datetime()
