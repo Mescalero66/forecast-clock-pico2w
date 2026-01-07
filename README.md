@@ -55,7 +55,7 @@
 ## Data Requirements and Update Frequency
 | No | Data / Function | Dependencies | Startup / <br>Refresh Interval | Returns |
 | --- | --- | --- | --- | --- |
-|  `1`  | **FLAG_GPS_HAS_FIX** |  | S |  |
+|  `1`  | get_GPS_fix() |  | S | when GPS_obj.has_fix = True, returns True |
 |  `2`  | **GPS_DATASET** | FLAG_GPS_HAS_FIX | S |  |
 |  `3`  | **GEOHASH** | GPS_DATASET | S |  |
 |  `4`  | Pico Internal Clock | GPS_DATASET | S |  |
