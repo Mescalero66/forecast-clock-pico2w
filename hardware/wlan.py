@@ -17,7 +17,7 @@ class WLAN:
             self.wlan_obj.active(True)
 
         for attempt in range(1, retries + 1):
-            print(f"Connect attempt {attempt} to SSID: {repr(ssid)}")
+            print(f"connectWiFi()  Connection attempt {attempt} to SSID: {repr(ssid)}")
             self.wlan_obj.connect(ssid, password)
 
             wait = wait_per_try
@@ -26,31 +26,31 @@ class WLAN:
                 if status < 0 or status >= 3:
                     break
                 wait -= 1
-                print("waiting for connection...")
+                print("connectWiFi()  Waiting for connection...")
                 time.sleep(1)
 
             status = self.wlan_obj.status()
             if status == 3:
-                print("Connected!")
+                print("connectWiFi()  Connected!")
                 ip = self.wlan_obj.ifconfig()[0]
-                print(f"IP address: {ip}")
+                print(f"connectWiFi()  WiFi IP address: {ip}")
                 return True
             elif status == -1:
-                print("Connection failed: generic error")
+                print("connectWiFi()  Connection failed: generic error")
             elif status == -2:
-                print("Connection failed: AP not found")
+                print("connectWiFi()  Connection failed: AP not found")
             elif status == -3:
-                print("Connection failed: connection failed")
+                print("connectWiFi()  Connection failed: connection failed")
             elif status == -4:
-                print("Connection failed: wrong password")
+                print("connectWiFi()  Connection failed: wrong password")
             else:
-                print(f"Connection failed: unknown status {status}")
+                print(f"connectWiFi()  Connection failed: unknown status {status}")
 
-            print("Retrying...\n")
+            print("connectWiFi()  Retrying WiFi connection...")
             time.sleep(2)  # short delay before next attempt
 
         # All retries failed
-        raise RuntimeError("WiFi connection failed after multiple attempts.")
+        raise RuntimeError("connectWiFi()  WiFi connection failed after multiple attempts.")
 
     def disconnectWiFi(self):
         if self.wlan_obj.isconnected():
@@ -76,7 +76,7 @@ class WLAN:
                 })
             return formatted
         except OSError as e:
-            print("Scan failed:", e)
+            print("connectWiFi()  WiFi Scan failed:", e)
             return []
 
     def checkWiFi(self):

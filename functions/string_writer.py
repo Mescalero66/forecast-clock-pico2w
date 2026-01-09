@@ -172,30 +172,35 @@ class ezFBfont():
             ypos += high + self.vgap
         return all_chars
     
-    def split_text(text): 
+    def split_text(text, max_len=10, max_lines=3):
         words = text.split()
-        lines = []
-        current = ""
-
-        for word in words:
-            # if adding this word exceeds line length, start new line
-            if len(current) + len(word) + (1 if current else 0) > 10:
+        def wrap(words, width):
+            lines = []
+            current = ""
+            for word in words:
+                if not current:
+                    current = word
+                elif len(current) + 1 + len(word) <= width:
+                    current += " " + word
+                else:
+                    lines.append(current)
+                    current = word
+            if current:
                 lines.append(current)
-                current = word
-            else:
-                current += (" " if current else "") + word
+            return lines
 
-        if current:
-            lines.append(current)
-
-        # if too many lines, try to rebalance to <= 3
-        while len(lines) > 3:
-            # merge the shortest two consecutive lines
-            shortest_i = min(range(len(lines)-1), key=lambda i: len(lines[i]) + len(lines[i+1]))
-            merged = lines[shortest_i] + " " + lines[shortest_i+1]
-            lines[shortest_i:shortest_i+2] = [merged]
-
-        # center each line within 10 characters
-        lines = [line.strip().center(10) for line in lines]
+        # Try increasing widths until it fits in max_lines
+        width = max_len
+        while True:
+            lines = wrap(words, width)
+            if len(lines) <= max_lines:
+                break
+            width += 1
+            # safety guard (should never hit in real text)
+            if width > max_len + 20:
+                break
+        # Strip spaces (defensive)
+        lines = [line.strip() for line in lines]
 
         return "\n".join(lines)
+        

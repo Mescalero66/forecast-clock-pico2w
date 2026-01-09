@@ -3,6 +3,11 @@ import time
 def now_utc():
     return time.time()
 
+def now_rtc_to_epoch(local_rtc_datetime):
+    y, m, d, _, hh, mm, ss, _ =  local_rtc_datetime
+    now = time.mktime((y, m, d, hh, mm, ss, 0, 0, 0))
+    return now
+
 def now_local(timezone_offset):
     return time.localtime(time.time() + timezone_offset)
 
