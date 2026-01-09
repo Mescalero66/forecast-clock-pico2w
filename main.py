@@ -47,6 +47,8 @@ _current_log_filename = None
 _original_print = builtins.print
 ## PARAMETERS
 BOM_MINIMUM_POLL_INTERVAL = 120 * 60
+EVENING_CUTOFF = 18
+MORNING_CUTOFF = 2
 
 ## HARDWARE
 wlan = WLAN()                                                                               # create WLAN object
@@ -127,27 +129,19 @@ class PrintLogger:
 
 def create_daily_log_file():
     global _current_log_filename
-    lt = localRTC.datetime()
-    filename = "logs/forecastclock_{:04d}{:02d}{:02d}.csv".format(lt[0], lt[1], lt[2])
-    timestamp = "{:04d}{:02d}{:02d}-{:02d}{:02d}{:02d}".format(lt[0], lt[1], lt[2], lt[4], lt[5], lt[6])
+    y, m, d = GPS_obj.current_data.year, GPS_obj.current_data.month, GPS_obj.current_data.day
+    filename = "logs/forecastclock_{:04d}{:02d}{:02d}.txt".format(y, m, d)
     if "logs" not in os.listdir():
         os.mkdir("logs")
     if _current_log_filename != filename:
         cleanup_old_logs()
         _current_log_filename = filename
-        try:
-            with open(_current_log_filename, "r"):
-                pass
-        except OSError:
-            #with open(_current_log_filename, "a") as text_file:
-                #text_file.write(f"{timestamp}")
-            pass
-    return _current_log_filename, timestamp
+    return _current_log_filename
 
 def cleanup_old_logs():
     if "logs" not in os.listdir():
         return
-    files = [f for f in os.listdir("logs") if f.startswith("forecastclock_") and f.endswith(".csv")]
+    files = [f for f in os.listdir("logs") if f.startswith("forecastclock_") and f.endswith(".txt")]
     files.sort()
     while len(files) > 2:
         oldest = files.pop(0)
@@ -246,7 +240,7 @@ async def system_setup():
     await asyncio.sleep(1)
     # set timezone offset (in seconds)
     _timezoneOffset = TimezoneInfo.tz_offset_minutes * 60
-    print(f"system_setup()  TZO: {TimezoneInfo.tz_data.zone_id} DST: {TimezoneInfo.tz_data.is_DST} Offset: {TimezoneInfo.tz_offset_minutes}mins")
+    print(f"system_setup()  TZO: {TimezoneInfo.tz_data.zone_id} DST: {TimezoneInfo.tz_data.is_DST} Offset: {TimezoneInfo.tz_offset_minutes} mins")
     # set the local clock time from the converted local time from TimezoneInfo
     localRTC.datetime((tziData.local_year, tziData.local_month, tziData.local_day, day_of_week, tziData.local_hour, tziData.local_minute, tziData.local_second, 0))
     await asyncio.sleep(0.5)
@@ -260,30 +254,30 @@ async def synchronise_watches():
     # see system_setup()
     try:
         GPS_obj.get_data()
-        await asyncio.sleep(2)
+        while GPS_obj.current_data.hour == 0.0 or GPS_obj.current_data.minute == 0.0 or GPS_obj.current_data.second == 0.0 or GPS_obj.current_data.time == "":
+        # ensuring that we have an up-to-date time
+            GPS_obj.get_data()
+            await asyncio.sleep(1)
         # calculate day_of_week, required to set the Pico internal clock (UTC)
         y, m, d = GPS_obj.current_data.year, GPS_obj.current_data.month, GPS_obj.current_data.day
         day_of_week = TimeCruncher.get_weekday(y, m, d)
-        await asyncio.sleep(0.5)
         # set the UTC clock time from GPS data
         hh, mm, ss = GPS_obj.current_data.hour, GPS_obj.current_data.minute, GPS_obj.current_data.second
         utcRTC.datetime((y, m, d, day_of_week, hh, mm, ss, 0))
-        await asyncio.sleep(0.5)
         # get the (UTC) datetime we just set and display it
         utcY, utcM, utcD, _, utcHr, utcMn, utcSc, _ = utcRTC.datetime()
-        print(f"synchronise_watches()  UTC: Y{utcY} M{utcM} D{utcD} H{utcHr} M{utcMn} S{utcSc}")
-        await asyncio.sleep(0.5)
+        print(f"synchronise_watches()  UTC: {utcY:04}-{utcM:02}-{utcD:02} {utcHr:02}.{utcMn:02}.{utcSc:02}")
         # calculate the local time from the GPS coordinates and UTC time
         tziData = TimezoneInfo.update_localtime(float(GPS_obj.current_data.latitude), float(GPS_obj.current_data.longitude), (utcY, utcM, utcD, utcHr, utcMn, utcSc))
-        print(f"synchronise_watches()  Tzi: Y{tziData.local_year} M{tziData.local_month} D{tziData.local_day} H{tziData.local_hour} M{tziData.local_minute} S{tziData.local_second}")
-        await asyncio.sleep(0.5)
-        print(f"synchronise_watches()  Tzo: {TimezoneInfo.tz_offset_minutes}mins [{TimezoneInfo.tz_data.zone_id}] DST:{TimezoneInfo.tz_data.is_DST}")
+        print(f"synchronise_watches()  TZO: {TimezoneInfo.tz_data.zone_id} DST: {TimezoneInfo.tz_data.is_DST} Offset: {TimezoneInfo.tz_offset_minutes} mins")
+        # display the adjustment to be made
+        thenY, thenM, thenD, _, thenHr, thenMn, thenSc, _ = localRTC.datetime()
+        print(f"synchronise_watches()  Adjusting Local RTC by: Y({tziData.local_year - thenY}) M({tziData.local_month - thenM}) D({tziData.local_day - thenD}) H({tziData.local_hour - thenHr}) M({tziData.local_minute - thenMn}) S({tziData.local_second - thenSc})")
         # set the local clock time from the converted local time from TimezoneInfo
         localRTC.datetime((tziData.local_year, tziData.local_month, tziData.local_day, day_of_week, tziData.local_hour, tziData.local_minute, tziData.local_second, 0))
-        await asyncio.sleep(0.5)
         # get the (Local) datetime we just set and display it
         lclY, lclM, lclD, _, lclHr, lclMn, lclSc, _ = localRTC.datetime()
-        print(f"synchronise_watches()  Lcl: Y{lclY} M{lclM} D{lclD} H{lclHr} M{lclMn} S{lclSc}")
+        print(f"synchronise_watches()  Lcl: {lclY:04}-{lclM:02}-{lclD:02} {lclHr:02}.{lclMn:02}.{lclSc:02}")
         await asyncio.sleep(0.5)
     except Exception as e:
         print(f"synchronise_watches() failed to synchronise internal clocks to GPS time: {e} - {repr(e)}")
@@ -404,7 +398,7 @@ async def update_display_temps(_todayMax, _overnighLow, _tomorrowMax):
     await asyncio.sleep(0.5)
     try:
         strLo = f"{_tomorrowMax}*C"
-        if hh > 18:
+        if hh > EVENING_CUTOFF:
             strHi = f"{_overnighLow}*C"   
             print(f"update_display_temps()  Hi:[Overnight Low: {strHi}] Lo:[Tomorrow Max: {strLo}] hh:{hh}")         
         else:
@@ -473,7 +467,7 @@ async def update_display_oleds(_forecastToday, _forecastTomorrow, _locCity):
     oledTR.display_pbm(icon, x_offset=84, y_offset=17)           
     descText = ezFBfont.split_text(_forecastToday['text'])
     oledTR12.write(descText, halign="center", valign="center", y=34, x=45)
-    if hh > 18 or hh < 2:
+    if hh > EVENING_CUTOFF or hh < MORNING_CUTOFF:
         oledTR16.write("Overnight Low:", halign="center", y=52, x=66)
         print(f"update_display_oleds()  TR: {_locCity} / {icon } / {_forecastToday['text']} / Overnight Low: / [hh={hh}]")
     else:
@@ -564,7 +558,7 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
         y, m, d, _, hh, mm, ss, _ = localRTC.datetime()
         ram_unused = int(((gc.mem_free()) / (gc.mem_free() + gc.mem_alloc())) * 100)
         #print(f"refresh_scheduler()  Loop Start  [{y:04}-{m:02}-{d:02} {hh:02}.{mm:02}.{ss:02}][RAM:{(100 - ram_unused):02}%][FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}][FS:{(now - lastForecastSync):04}][NB:{new_bulletin:>1}][FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}][LOR:{(now - lastOledRefresh):04}][SW:{(now - lastSynchroniseWatches):04}][LLR:{(now - lastLedRefresh):04}]")
-        print(f"refresh_scheduler()  Loop Start  [RAM:{(100 - ram_unused):02}%][FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}][FS:{(now - lastForecastSync):04}][NB:{new_bulletin:>1}][FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}][LOR:{(now - lastOledRefresh):04}][SW:{(now - lastSynchroniseWatches):04}][LLR:{(now - lastLedRefresh):04}]")
+        print(f"refresh_scheduler()  Loop Start  [RAM:{(100 - ram_unused):03}%][FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}][FS:{(now - lastForecastSync):04}][NB:{new_bulletin:>1}][FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}][LOR:{(now - lastOledRefresh):04}][SW:{(now - lastSynchroniseWatches):04}][LLR:{(now - lastLedRefresh):04}]")
         await asyncio.sleep(6)
         if ((now - lastForecastDataRefresh) >= 86400) or ((now - _updateMetadata["bulletin_time"]) >= 46800) or (now >= _updateMetadata["bulletin_next"]):
             print(f"refresh_scheduler()  calls get_forecast_data()   [FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}]")
@@ -596,36 +590,35 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
             print(f"refresh_scheduler()  calls update_display_temps()    [LLR:{(now - lastLedRefresh):04}][NB:{new_bulletin}]")
             temps = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
             lastLedRefresh = await temps
+        if (hh == EVENING_CUTOFF) and ((mm == 0) or (mm == 1) or (mm == 2)):
+            print(f"refresh_scheduler()  calls update_display_temps()    [EVE:hh{(hh):02}mm{(mm):02}]")
+            temps = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
+            lastLedRefresh = await temps
         new_bulletin = False
         y, m, d, _, hh, mm, ss, _ = localRTC.datetime()
         now = TimeCruncher.now_rtc_to_epoch(localRTC.datetime())
         #print(f"refresh_scheduler()  Loop End    [{y:04}-{m:02}-{d:02} {hh:02}.{mm:02}.{ss:02}][RAM:{(100 - ram_unused):02}%][FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}][FS:{(now - lastForecastSync):04}][NB:{new_bulletin:>1}][FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}][LOR:{(now - lastOledRefresh):04}][SW:{(now - lastSynchroniseWatches):04}][LLR:{(now - lastLedRefresh):04}]")
-        print(f"refresh_scheduler()  Loop End    [RAM:{(100 - ram_unused):02}%][FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}][FS:{(now - lastForecastSync):04}][NB:{new_bulletin:>1}][FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}][LOR:{(now - lastOledRefresh):04}][SW:{(now - lastSynchroniseWatches):04}][LLR:{(now - lastLedRefresh):04}]")
+        print(f"refresh_scheduler()  Loop End    [RAM:{(100 - ram_unused):03}%][FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}][FS:{(now - lastForecastSync):04}][NB:{new_bulletin:>1}][FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}][LOR:{(now - lastOledRefresh):04}][SW:{(now - lastSynchroniseWatches):04}][LLR:{(now - lastLedRefresh):04}]")
         logger.flush()
         gc.collect()
         await asyncio.sleep(95)        
 
+### STARTUP PROCESSES
+# first, get a GPS fix (function won't return until has_fix is True)
+asyncio.run(get_GPS_fix())
 # TERMINAL LOGGING FUNCTION 
 if ENABLE_LOGGING == 0:
     pass
 else:
     filename, timestamp = create_daily_log_file()
-    if filename.startswith("forecastclock_2021"):
-        pass
-    else:
-        log = open(filename, "a")
-        _original_print = builtins.print
-        logger = PrintLogger(log, flush_interval=30)
-
-        def logged_print(*args, **kwargs):
-            _original_print(*args, **kwargs)
-            line = " ".join(str(a) for a in args)
-            logger.log_line(line)
-        builtins.print = logged_print
-
-### STARTUP PROCESSES
-# first, get a GPS fix (function won't return until has_fix is True)
-asyncio.run(get_GPS_fix())
+    log = open(filename, "a")
+    _original_print = builtins.print
+    logger = PrintLogger(log, flush_interval=60)
+    def logged_print(*args, **kwargs):
+        _original_print(*args, **kwargs)
+        line = " ".join(str(a) for a in args)
+        logger.log_line(line)
+    builtins.print = logged_print
 # then, proceed with system setup
 print("main.py calls system_setup()")
 _geohash, _timezoneOffset = asyncio.run(system_setup())
