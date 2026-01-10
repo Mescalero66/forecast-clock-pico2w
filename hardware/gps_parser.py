@@ -73,7 +73,7 @@ class GPSReader:
             return
         
         self.new_data = _process_nmea_data(self.message_buffer)
-        if self.new_data.has_fix == True:
+        if self.has_new_data == True:
             self.current_data = self.new_data
         self.message_buffer = ""
     

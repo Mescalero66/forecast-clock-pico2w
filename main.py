@@ -254,6 +254,7 @@ async def synchronise_watches():
     # see system_setup()
     try:
         GPS_obj.get_data()
+        await asyncio.sleep(1)
         while GPS_obj.current_data.hour == 0.0 or GPS_obj.current_data.minute == 0.0 or GPS_obj.current_data.second == 0.0 or GPS_obj.current_data.time == "":
         # ensuring that we have an up-to-date time
             GPS_obj.get_data()
@@ -563,36 +564,43 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
         if ((now - lastForecastDataRefresh) >= 86400) or ((now - _updateMetadata["bulletin_time"]) >= 46800) or (now >= _updateMetadata["bulletin_next"]):
             print(f"refresh_scheduler()  calls get_forecast_data()   [FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}]")
             forecast = asyncio.create_task(get_forecast_data(_geohash))
+            lastForecastDataRefresh = now
             lastForecastDataRefresh, _forecastMeta, _forecastData = await forecast
             new_bulletin = True
         await asyncio.sleep(6)
         if ((now - lastForecastSync) >= 1800) or (new_bulletin == True):
             print(f"refresh_scheduler()  calls update_forecast() [FS:{(now - lastForecastSync):04}][NB:{new_bulletin}]")
             forecastSync = asyncio.create_task(update_forecast(_forecastMeta, _forecastData, _timezoneOffset))
+            lastForecastSync = now
             lastForecastSync, _updateMetadata, _forecastToday, _forecastTomorrow = await forecastSync
         elif (_forecastToday["yy"] != y) or (_forecastToday["mm"] != m) or (_forecastToday["dd"] != d):
             print(f"refresh_scheduler()  calls update_forecast() [FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}]")
             forecastSync = asyncio.create_task(update_forecast(_forecastMeta, _forecastData, _timezoneOffset))
+            lastForecastSync = now
             lastForecastSync, _updateMetadata, _forecastToday, _forecastTomorrow = await forecastSync
             new_bulletin = True
         await asyncio.sleep(6)
         if ((now - lastOledRefresh) >= 1800) or (new_bulletin == True):
             print(f"refresh_scheduler()  calls update_display_oleds()    [LOR:{(now - lastOledRefresh):04}][NB:{new_bulletin}]")
             oleds = asyncio.create_task(update_display_oleds(_forecastToday, _forecastTomorrow, _locCity))
-            lastLedRefresh = await oleds
+            lastOledRefresh = now
+            lastOledRefresh = await oleds
         await asyncio.sleep(6)
         if ((now - lastSynchroniseWatches) >= 1440):
             print(f"refresh_scheduler()  calls synchronise_watches() [SW:{(now - lastSynchroniseWatches):04}]")
             sync = asyncio.create_task(synchronise_watches())
+            lastSynchroniseWatches = now
             lastSynchroniseWatches = await sync
         await asyncio.sleep(6)
         if ((now - lastLedRefresh) >= 900) or (new_bulletin == True):
             print(f"refresh_scheduler()  calls update_display_temps()    [LLR:{(now - lastLedRefresh):04}][NB:{new_bulletin}]")
             temps = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
+            lastLedRefresh = now
             lastLedRefresh = await temps
         if (hh == EVENING_CUTOFF) and ((mm == 0) or (mm == 1) or (mm == 2)):
             print(f"refresh_scheduler()  calls update_display_temps()    [EVE:hh{(hh):02}mm{(mm):02}]")
             temps = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
+            lastLedRefresh = now
             lastLedRefresh = await temps
         new_bulletin = False
         y, m, d, _, hh, mm, ss, _ = localRTC.datetime()
@@ -610,7 +618,7 @@ asyncio.run(get_GPS_fix())
 if ENABLE_LOGGING == 0:
     pass
 else:
-    filename, timestamp = create_daily_log_file()
+    filename = create_daily_log_file()
     log = open(filename, "a")
     _original_print = builtins.print
     logger = PrintLogger(log, flush_interval=60)
