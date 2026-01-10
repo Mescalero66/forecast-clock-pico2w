@@ -73,8 +73,10 @@ class GPSReader:
             return
         
         self.new_data = _process_nmea_data(self.message_buffer)
-        if self.has_new_data == True:
-            self.current_data = self.new_data
+        # A TEST OF has_new_data OR A TEST OF has_fix MEANS THAT current_data IS NEVER SET
+        #if self.has_new_data == True:
+            #self.current_data = self.new_data
+        self.current_data = self.new_data
         self.message_buffer = ""
     
     # Properties for direct access to GPS data

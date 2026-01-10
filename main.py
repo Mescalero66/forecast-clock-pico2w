@@ -3,7 +3,7 @@ import asyncio
 from machine import I2C, Pin, UART, RTC
 
 from hardware.LED8_HT16K33 import HT16K33LED
-from hardware.GPS_PARSER import GPSReader
+from hardware.GPS_PARSER import GPSReader, GPSData
 from hardware.LED4_TM1650 import LED4digdisp
 from hardware.MUX_TCA9548A import I2CMultiplex
 from hardware.OLED_SSD1306 import SSD1306_I2C
@@ -49,6 +49,12 @@ _original_print = builtins.print
 BOM_MINIMUM_POLL_INTERVAL = 120 * 60
 EVENING_CUTOFF = 18
 MORNING_CUTOFF = 2
+INTERVAL_FORECAST_DATA = 23 * 60 * 60
+INTERVAL_BULLETIN_AGE = 14 * 60 * 60
+INTERVAL_FORECAST_SYNC = 30 * 60
+INTERVAL_OLED_REFRESH = 30 * 60
+INTERVAL_SYNC_WATCHES = 1 * 60 ## TESTING ONLY - RETURN TO 24 MINUTES
+INTERVAL_LED_REFRESH = 15 * 60
 
 ## HARDWARE
 wlan = WLAN()                                                                               # create WLAN object
@@ -57,7 +63,7 @@ localRTC = RTC()                                                                
 uart = UART(0, baudrate=9600, tx=Pin(PIN_UART_TX), rx=Pin(PIN_UART_RX))                     # Set up UART connection to GPS module
 i2c = I2C(0, scl=Pin(PIN_LED8_SCL), sda=Pin(PIN_LED8_SDA))                                  # Set up I2C connection
 mux = I2CMultiplex(ADDR_MUX, I2Cbus=1, scl_pin=PIN_MUX_SCL, sda_pin=PIN_MUX_SDA)            # Set up I2C multiplexer
-GPS_obj = GPSReader(uart)                                                                   # Create a GPS reader object   
+GPS_obj = GPSReader(uart)                                                                   # Create a GPS reader object 
 disp8 = HT16K33LED(i2c)                                                                     # Create 8digit LED object
 disp4H = LED4digdisp(1, PIN_LED4H_SCL, PIN_LED4H_SDA)                                       # Create 4digit LED object (HIGH)         
 disp4L = LED4digdisp(2, PIN_LED4L_SCL, PIN_LED4L_SDA)                                       # Create 4digit LED object (LOW)
@@ -185,13 +191,13 @@ async def radar_GPS_animation(t):
 async def get_GPS_fix():
     t = 0.1
     while not GPS_obj.has_fix:
-        GPS_obj.get_data()
-        print(f"get_GPS_fix()  Listens for satellites: {GPS_obj.current_data.satellites:02}/{GPS_obj.new_data.satellites:02} + [{GPS_obj.message_buffer}]")
+        print(f"get_GPS_fix()  Listens for satellites: {GPS_obj.has_new_data:02}/{GPS_obj.current_data.has_fix:02}/{GPS_obj.current_data.satellites:02} + [{GPS_obj.message_buffer}]")
         asyncio.run(radar_GPS_animation(t))
-        NoS = f"GPS = {GPS_obj.new_data.satellites:02}"
+        NoS = f"GPS = {GPS_obj.current_data.satellites:02}"
         disp8.set_string(NoS, "r")
+        GPS_obj.get_data()
         asyncio.run(radar_GPS_animation(t))
-        NoS = f"GPS = {GPS_obj.new_data.satellites:02}"
+        NoS = f"GPS = {GPS_obj.current_data.satellites:02}"
         disp8.set_string(NoS, "r")
     return GPS_obj.has_fix
 
@@ -242,6 +248,7 @@ async def system_setup():
     _timezoneOffset = TimezoneInfo.tz_offset_minutes * 60
     print(f"system_setup()  TZO: {TimezoneInfo.tz_data.zone_id} DST: {TimezoneInfo.tz_data.is_DST} Offset: {TimezoneInfo.tz_offset_minutes} mins")
     # set the local clock time from the converted local time from TimezoneInfo
+    day_of_week = TimeCruncher.get_weekday(tziData.local_year, tziData.local_month, tziData.local_day)
     localRTC.datetime((tziData.local_year, tziData.local_month, tziData.local_day, day_of_week, tziData.local_hour, tziData.local_minute, tziData.local_second, 0))
     await asyncio.sleep(0.5)
     # get the (Local) datetime we just set and display it
@@ -255,19 +262,35 @@ async def synchronise_watches():
     try:
         GPS_obj.get_data()
         await asyncio.sleep(1)
-        while GPS_obj.current_data.hour == 0.0 or GPS_obj.current_data.minute == 0.0 or GPS_obj.current_data.second == 0.0 or GPS_obj.current_data.time == "":
+        #while GPS_obj.current_data.hour == 0.0 or GPS_obj.current_data.minute == 0.0 or GPS_obj.current_data.second == 0.0 or GPS_obj.current_data.time == "":
         # ensuring that we have an up-to-date time
-            GPS_obj.get_data()
-            await asyncio.sleep(1)
+            #GPS_obj.get_data()
+            #await asyncio.sleep(1)
         # calculate day_of_week, required to set the Pico internal clock (UTC)
-        y, m, d = GPS_obj.current_data.year, GPS_obj.current_data.month, GPS_obj.current_data.day
+
+        ##### PRE
+        utcY, utcM, utcD, _, utcHr, utcMn, utcSc, _ = utcRTC.datetime()
+        print(f"synchronise_watches()  PRE-CHANGE    UTC: {utcY:04}-{utcM:02}-{utcD:02} {utcHr:02}.{utcMn:02}.{utcSc:02}")
+        lclY, lclM, lclD, _, lclHr, lclMn, lclSc, _ = localRTC.datetime()
+        print(f"synchronise_watches()  PRE-CHANGE    Lcl: {lclY:04}-{lclM:02}-{lclD:02} {lclHr:02}.{lclMn:02}.{lclSc:02}")
+        ##### PRE
+
+        #y, m, d = GPS_obj.current_data.year, GPS_obj.current_data.month, GPS_obj.current_data.day
+        y, m, d = GPS_obj.date_ymd
         day_of_week = TimeCruncher.get_weekday(y, m, d)
         # set the UTC clock time from GPS data
-        hh, mm, ss = GPS_obj.current_data.hour, GPS_obj.current_data.minute, GPS_obj.current_data.second
+        #hh, mm, ss = GPS_obj.current_data.hour, GPS_obj.current_data.minute, GPS_obj.current_data.second
+        hh, mm, ss = GPS_obj.time_split
         utcRTC.datetime((y, m, d, day_of_week, hh, mm, ss, 0))
         # get the (UTC) datetime we just set and display it
         utcY, utcM, utcD, _, utcHr, utcMn, utcSc, _ = utcRTC.datetime()
-        print(f"synchronise_watches()  UTC: {utcY:04}-{utcM:02}-{utcD:02} {utcHr:02}.{utcMn:02}.{utcSc:02}")
+
+        ###### POST
+        #print(f"synchronise_watches()  UTC: {utcY:04}-{utcM:02}-{utcD:02} {utcHr:02}.{utcMn:02}.{utcSc:02}")
+        print(f"synchronise_watches()  POST-CHANGE   UTC: {utcY:04}-{utcM:02}-{utcD:02} {utcHr:02}.{utcMn:02}.{utcSc:02}")
+        print(f"synchronise_watches()  POST-UTC-CHNG Lcl: {lclY:04}-{lclM:02}-{lclD:02} {lclHr:02}.{lclMn:02}.{lclSc:02}")
+        ###### POST
+
         # calculate the local time from the GPS coordinates and UTC time
         tziData = TimezoneInfo.update_localtime(float(GPS_obj.current_data.latitude), float(GPS_obj.current_data.longitude), (utcY, utcM, utcD, utcHr, utcMn, utcSc))
         print(f"synchronise_watches()  TZO: {TimezoneInfo.tz_data.zone_id} DST: {TimezoneInfo.tz_data.is_DST} Offset: {TimezoneInfo.tz_offset_minutes} mins")
@@ -275,10 +298,16 @@ async def synchronise_watches():
         thenY, thenM, thenD, _, thenHr, thenMn, thenSc, _ = localRTC.datetime()
         print(f"synchronise_watches()  Adjusting Local RTC by: Y({tziData.local_year - thenY}) M({tziData.local_month - thenM}) D({tziData.local_day - thenD}) H({tziData.local_hour - thenHr}) M({tziData.local_minute - thenMn}) S({tziData.local_second - thenSc})")
         # set the local clock time from the converted local time from TimezoneInfo
+        day_of_week = TimeCruncher.get_weekday(tziData.local_year, tziData.local_month, tziData.local_day)
         localRTC.datetime((tziData.local_year, tziData.local_month, tziData.local_day, day_of_week, tziData.local_hour, tziData.local_minute, tziData.local_second, 0))
         # get the (Local) datetime we just set and display it
         lclY, lclM, lclD, _, lclHr, lclMn, lclSc, _ = localRTC.datetime()
-        print(f"synchronise_watches()  Lcl: {lclY:04}-{lclM:02}-{lclD:02} {lclHr:02}.{lclMn:02}.{lclSc:02}")
+
+        ###### POST
+        #print(f"synchronise_watches()  Lcl: {lclY:04}-{lclM:02}-{lclD:02} {lclHr:02}.{lclMn:02}.{lclSc:02}")
+        print(f"synchronise_watches()  POST-CHANGE Lcl: {lclY:04}-{lclM:02}-{lclD:02} {lclHr:02}.{lclMn:02}.{lclSc:02}")
+        ###### POST
+
         await asyncio.sleep(0.5)
     except Exception as e:
         print(f"synchronise_watches() failed to synchronise internal clocks to GPS time: {e} - {repr(e)}")
@@ -561,14 +590,14 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
         #print(f"refresh_scheduler()  Loop Start  [{y:04}-{m:02}-{d:02} {hh:02}.{mm:02}.{ss:02}][RAM:{(100 - ram_unused):02}%][FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}][FS:{(now - lastForecastSync):04}][NB:{new_bulletin:>1}][FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}][LOR:{(now - lastOledRefresh):04}][SW:{(now - lastSynchroniseWatches):04}][LLR:{(now - lastLedRefresh):04}]")
         print(f"refresh_scheduler()  Loop Start  [RAM:{(100 - ram_unused):03}%][FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}][FS:{(now - lastForecastSync):04}][NB:{new_bulletin:>1}][FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}][LOR:{(now - lastOledRefresh):04}][SW:{(now - lastSynchroniseWatches):04}][LLR:{(now - lastLedRefresh):04}]")
         await asyncio.sleep(6)
-        if ((now - lastForecastDataRefresh) >= 86400) or ((now - _updateMetadata["bulletin_time"]) >= 46800) or (now >= _updateMetadata["bulletin_next"]):
+        if ((now - lastForecastDataRefresh) >= INTERVAL_FORECAST_DATA) or ((now - _updateMetadata["bulletin_time"]) >= INTERVAL_BULLETIN_AGE) or (now >= _updateMetadata["bulletin_next"]):
             print(f"refresh_scheduler()  calls get_forecast_data()   [FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}]")
             forecast = asyncio.create_task(get_forecast_data(_geohash))
             lastForecastDataRefresh = now
             lastForecastDataRefresh, _forecastMeta, _forecastData = await forecast
             new_bulletin = True
         await asyncio.sleep(6)
-        if ((now - lastForecastSync) >= 1800) or (new_bulletin == True):
+        if ((now - lastForecastSync) >= INTERVAL_FORECAST_SYNC) or (new_bulletin == True):
             print(f"refresh_scheduler()  calls update_forecast() [FS:{(now - lastForecastSync):04}][NB:{new_bulletin}]")
             forecastSync = asyncio.create_task(update_forecast(_forecastMeta, _forecastData, _timezoneOffset))
             lastForecastSync = now
@@ -580,19 +609,19 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
             lastForecastSync, _updateMetadata, _forecastToday, _forecastTomorrow = await forecastSync
             new_bulletin = True
         await asyncio.sleep(6)
-        if ((now - lastOledRefresh) >= 1800) or (new_bulletin == True):
+        if ((now - lastOledRefresh) >= INTERVAL_OLED_REFRESH) or (new_bulletin == True):
             print(f"refresh_scheduler()  calls update_display_oleds()    [LOR:{(now - lastOledRefresh):04}][NB:{new_bulletin}]")
             oleds = asyncio.create_task(update_display_oleds(_forecastToday, _forecastTomorrow, _locCity))
             lastOledRefresh = now
             lastOledRefresh = await oleds
         await asyncio.sleep(6)
-        if ((now - lastSynchroniseWatches) >= 1440):
+        if ((now - lastSynchroniseWatches) >= INTERVAL_SYNC_WATCHES):
             print(f"refresh_scheduler()  calls synchronise_watches() [SW:{(now - lastSynchroniseWatches):04}]")
             sync = asyncio.create_task(synchronise_watches())
             lastSynchroniseWatches = now
             lastSynchroniseWatches = await sync
         await asyncio.sleep(6)
-        if ((now - lastLedRefresh) >= 900) or (new_bulletin == True):
+        if ((now - lastLedRefresh) >= INTERVAL_LED_REFRESH) or (new_bulletin == True):
             print(f"refresh_scheduler()  calls update_display_temps()    [LLR:{(now - lastLedRefresh):04}][NB:{new_bulletin}]")
             temps = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
             lastLedRefresh = now
@@ -603,7 +632,7 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
             lastLedRefresh = now
             lastLedRefresh = await temps
         new_bulletin = False
-        y, m, d, _, hh, mm, ss, _ = localRTC.datetime()
+        #y, m, d, _, hh, mm, ss, _ = localRTC.datetime()
         now = TimeCruncher.now_rtc_to_epoch(localRTC.datetime())
         #print(f"refresh_scheduler()  Loop End    [{y:04}-{m:02}-{d:02} {hh:02}.{mm:02}.{ss:02}][RAM:{(100 - ram_unused):02}%][FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}][FS:{(now - lastForecastSync):04}][NB:{new_bulletin:>1}][FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}][LOR:{(now - lastOledRefresh):04}][SW:{(now - lastSynchroniseWatches):04}][LLR:{(now - lastLedRefresh):04}]")
         print(f"refresh_scheduler()  Loop End    [RAM:{(100 - ram_unused):03}%][FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}][FS:{(now - lastForecastSync):04}][NB:{new_bulletin:>1}][FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}][LOR:{(now - lastOledRefresh):04}][SW:{(now - lastSynchroniseWatches):04}][LLR:{(now - lastLedRefresh):04}]")
