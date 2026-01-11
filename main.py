@@ -51,14 +51,14 @@ MORNING_CUTOFF = 2
 BOM_MINIMUM_POLL_INTERVAL = 120 * 60
 WATCH_SYNC_ADJUST_MAX_PERCENT = 0.05
 WATCH_SYNC_CONSECUTIVE_VALIDS = 3
-INTERVAL_SCHEDULER_TASK = 1                                                                 ##### TESTING ONLY: DEFAULT 6
-INTERVAL_SCHEDULER_SLEEP = 6                                                               ##### TESTING ONLY: DEFAULT 95
-INTERVAL_FORECAST_DATA = 23 * 60 * 60
-INTERVAL_BULLETIN_AGE = 14 * 60 * 60
-INTERVAL_FORECAST_SYNC = 30 * 60
-INTERVAL_OLED_REFRESH = 30 * 60
-INTERVAL_SYNC_WATCHES = 0.4 * 60                                                            ##### TESTING ONLY: DEFAULT 12
-INTERVAL_LED_REFRESH = 15 * 60
+INTERVAL_SCHEDULER_TASK = 6                                                                 ##### DEFAULT 6 SECONDS
+INTERVAL_SCHEDULER_SLEEP = 95                                                               ##### DEFAULT 95 SECONDS
+INTERVAL_FORECAST_DATA = 23 * 60 * 60                                                       ##### DEFAULT 23 HOURS
+INTERVAL_BULLETIN_AGE = 14 * 60 * 60                                                        ##### DEFAULT 14 HOURS
+INTERVAL_FORECAST_SYNC = 60 * 60                                                            ##### DEFAULT 60 MINUTES
+INTERVAL_OLED_REFRESH = 30 * 60                                                             ##### DEFAULT 30 MINUTES
+INTERVAL_SYNC_WATCHES = 12 * 60                                                             ##### DEFAULT 12 MINUTES
+INTERVAL_LED_REFRESH = 15 * 60                                                              ##### DEFAULT 15 MINUTES
 
 ## HARDWARE
 cpu_temp = machine.ADC(4)
@@ -279,12 +279,12 @@ async def synchronise_watches(_call_time, _last_sync_time):
             await asyncio.sleep(1)
             returned_values = GPS_obj.current_data.year, GPS_obj.current_data.month, GPS_obj.current_data.day, GPS_obj.current_data.hour, GPS_obj.current_data.minute, GPS_obj.current_data.second
             new_time = (GPS_obj.current_data.minute * 60) + (GPS_obj.current_data.second)
-            print(f"synchronise_watches()  GPS data raw returned_values: {returned_values}")
+            #print(f"synchronise_watches()  GPS data raw returned_values: {returned_values}")
             if any(v in (0, None) for v in returned_values):
                 conseq_valids = 0
                 prev_time = None
                 attempts += 1
-                print(f"synchronise_watches()  GPS data raw returned_values: Attempt #{attempts} - CONTAINS ZEROES")
+                #print(f"synchronise_watches()  GPS data raw returned_values: Attempt #{attempts} - CONTAINS ZEROES")
                 continue
             if not prev_time == None:
                 delta = new_time - prev_time
@@ -292,17 +292,18 @@ async def synchronise_watches(_call_time, _last_sync_time):
                     conseq_valids = 0
                     prev_time = None
                     attempts += 1
-                    print(f"synchronise_watches()  GPS data raw returned_values: Attempt #{attempts} - DELTA {delta}")
+                    #print(f"synchronise_watches()  GPS data raw returned_values: Attempt #{attempts} - DELTA {delta}")
                     continue
             conseq_valids += 1
             attempts += 1
-            print(f"synchronise_watches()  GPS data raw returned_values: Attempt #{attempts} - VALID #{conseq_valids}")
+            #print(f"synchronise_watches()  GPS data raw returned_values: Attempt #{attempts} - VALID #{conseq_valids}")
             prev_time = new_time
             if conseq_valids >= WATCH_SYNC_CONSECUTIVE_VALIDS:
                 break
             elif attempts >= (WATCH_SYNC_CONSECUTIVE_VALIDS * 4):
-                print(f"synchronise_watches()  received <{WATCH_SYNC_CONSECUTIVE_VALIDS} consecutive valid data sets in the sampled {(WATCH_SYNC_CONSECUTIVE_VALIDS * 4)}. CLOCK NOT UPDATED")
+                print(f"synchronise_watches()  received <[{WATCH_SYNC_CONSECUTIVE_VALIDS}] consecutive valid data sets in the sampled [{(WATCH_SYNC_CONSECUTIVE_VALIDS * 4)}]. CLOCK NOT UPDATED")
                 return _last_sync_time
+        print(f"synchronise_watches()  Resync valid time data from GPS with [{conseq_valids}] consecutive valid values from [{attempts}] attempts.")
         await asyncio.sleep(0.2)
         # calculate day_of_week, required to set the Pico internal clock (UTC)
         clock_current = TimeCruncher.now_rtc_to_epoch(rtc.datetime())
