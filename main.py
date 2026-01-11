@@ -204,13 +204,13 @@ async def radar_GPS_animation(t):
 async def get_GPS_fix():
     t = 0.1
     while not GPS_obj.has_fix:
-        print(f"get_GPS_fix()  Listens for satellites: {GPS_obj.has_new_data:02}/{GPS_obj.current_data.has_fix:02}/{GPS_obj.current_data.satellites:02} + [{GPS_obj.message_buffer}]")
-        asyncio.run(radar_GPS_animation(t))
-        NoS = f"GPS = {GPS_obj.current_data.satellites:02}"
-        disp8.set_string(NoS, "r")
         GPS_obj.get_data()
+        print(f"get_GPS_fix()  Listens for satellites: {GPS_obj.current_data.satellites:02}/{GPS_obj.current_data.has_fix:02}[{GPS_obj.message_buffer}]")
         asyncio.run(radar_GPS_animation(t))
-        NoS = f"GPS = {GPS_obj.current_data.satellites:02}"
+        NoS = f"GPS= {abs(hash(GPS_obj.message_buffer)) % 10000:04d}"
+        disp8.set_string(NoS, "r")
+        asyncio.run(radar_GPS_animation(t))
+        NoS = f"GPS= {abs(hash(GPS_obj.message_buffer)) % 10000:04d}"
         disp8.set_string(NoS, "r")
     return GPS_obj.has_fix
 
