@@ -50,7 +50,7 @@ EVENING_CUTOFF = 18
 MORNING_CUTOFF = 2
 BOM_MINIMUM_POLL_INTERVAL = 120 * 60
 WATCH_SYNC_ADJUST_MAX_PERCENT = 0.05
-WATCH_SYNC_CONSECUTIVE_VALIDS = 2
+WATCH_SYNC_CONSECUTIVE_VALIDS = 3
 INTERVAL_SCHEDULER_TASK = 1                                                                 ##### TESTING ONLY: DEFAULT 6
 INTERVAL_SCHEDULER_SLEEP = 6                                                               ##### TESTING ONLY: DEFAULT 95
 INTERVAL_FORECAST_DATA = 23 * 60 * 60
@@ -207,10 +207,10 @@ async def get_GPS_fix():
         GPS_obj.get_data()
         print(f"get_GPS_fix()  Listens for satellites: {GPS_obj.current_data.satellites:02}/{GPS_obj.current_data.has_fix:02}[{GPS_obj.message_buffer}]")
         asyncio.run(radar_GPS_animation(t))
-        NoS = f"GPS= {abs(hash(GPS_obj.message_buffer)) % 10000:04d}"
+        NoS = f"GPS={abs(hash(GPS_obj.message_buffer)) % 10000:04d}"
         disp8.set_string(NoS, "r")
         asyncio.run(radar_GPS_animation(t))
-        NoS = f"GPS= {abs(hash(GPS_obj.message_buffer)) % 10000:04d}"
+        NoS = f"GPS={abs(hash(GPS_obj.message_buffer)) % 10000:04d}"
         disp8.set_string(NoS, "r")
     return GPS_obj.has_fix
 
@@ -278,30 +278,31 @@ async def synchronise_watches(_call_time, _last_sync_time):
             GPS_obj.get_data()
             await asyncio.sleep(1)
             returned_values = GPS_obj.current_data.year, GPS_obj.current_data.month, GPS_obj.current_data.day, GPS_obj.current_data.hour, GPS_obj.current_data.minute, GPS_obj.current_data.second
-            print(f"synchronise_watches()  GPS data raw returned_values:{returned_values}")
+            new_time = (GPS_obj.current_data.minute * 60) + (GPS_obj.current_data.second)
+            print(f"synchronise_watches()  GPS data raw returned_values: {returned_values}")
             if any(v in (0, None) for v in returned_values):
                 conseq_valids = 0
                 prev_time = None
                 attempts += 1
-                print(f"synchronise_watches()  GPS data raw returned_values = CONTAINS ZEROES")
-            elif not prev_time == None:
-                new_time = (GPS_obj.current_data.minute * 60) + (GPS_obj.current_data.second)
+                print(f"synchronise_watches()  GPS data raw returned_values: Attempt #{attempts} - CONTAINS ZEROES")
+                continue
+            if not prev_time == None:
                 delta = new_time - prev_time
                 if not (0 <= delta <= 3):
                     conseq_valids = 0
                     prev_time = None
                     attempts += 1
-                    print(f"synchronise_watches()  GPS data raw returned_values = WENT BACKWARDS")
-                else:
-                    conseq_valids += 1
-                    attempts += 1
-                    prev_time = new_time
-                    print(f"synchronise_watches()  GPS data raw returned_values = VALID")
+                    print(f"synchronise_watches()  GPS data raw returned_values: Attempt #{attempts} - DELTA {delta}")
+                    continue
+            conseq_valids += 1
+            attempts += 1
+            print(f"synchronise_watches()  GPS data raw returned_values: Attempt #{attempts} - VALID #{conseq_valids}")
+            prev_time = new_time
             if conseq_valids >= WATCH_SYNC_CONSECUTIVE_VALIDS:
                 break
             elif attempts >= (WATCH_SYNC_CONSECUTIVE_VALIDS * 4):
                 print(f"synchronise_watches()  received <{WATCH_SYNC_CONSECUTIVE_VALIDS} consecutive valid data sets in the sampled {(WATCH_SYNC_CONSECUTIVE_VALIDS * 4)}. CLOCK NOT UPDATED")
-                return _call_time
+                return _last_sync_time
         await asyncio.sleep(0.2)
         # calculate day_of_week, required to set the Pico internal clock (UTC)
         clock_current = TimeCruncher.now_rtc_to_epoch(rtc.datetime())
@@ -311,14 +312,15 @@ async def synchronise_watches(_call_time, _last_sync_time):
         tziData = TimezoneInfo.update_localtime(float(GPS_obj.current_data.latitude), float(GPS_obj.current_data.longitude), (y, m, d, hh, mm, ss))
         #print(f"synchronise_watches()  TZO: {TimezoneInfo.tz_data.zone_id} DST: {TimezoneInfo.tz_data.is_DST} Offset: {TimezoneInfo.tz_offset_minutes} mins")
         day_of_week = TimeCruncher.get_weekday(tziData.local_year, tziData.local_month, tziData.local_day)
-        clock_new = TimeCruncher.now_rtc_to_epoch(rtc.datetime((tziData.local_year, tziData.local_month, tziData.local_day, day_of_week, tziData.local_hour, tziData.local_minute, tziData.local_second, 0)))
+        clock_new = TimeCruncher.now_rtc_to_epoch((tziData.local_year, tziData.local_month, tziData.local_day, day_of_week, tziData.local_hour, tziData.local_minute, tziData.local_second, 0))
         await asyncio.sleep(0.2)
         # calculate what the difference is, guard against huge jumps
         clock_diff = clock_new - clock_current
-        clock_adj_thresh = min(0, _last_sync_time * WATCH_SYNC_ADJUST_MAX_PERCENT)
+        clock_adj_thresh = (_call_time - _last_sync_time) * WATCH_SYNC_ADJUST_MAX_PERCENT
+        clock_adj_thresh = max(1, int(clock_adj_thresh))
         if abs(clock_diff) > (clock_adj_thresh):
             print(f"synchronise_watches()  received GPS data greater than the maximum adjustment variance: [{abs(clock_diff)}/{clock_adj_thresh}]. CLOCK NOT UPDATED")
-            return _call_time
+            return _last_sync_time
         # display the adjustment to be made
         thenY, thenM, thenD, _, thenHr, thenMn, thenSc, _ = rtc.datetime()
         # set the local clock time from the converted local time from TimezoneInfo
@@ -332,7 +334,7 @@ async def synchronise_watches(_call_time, _last_sync_time):
     except Exception as e:
         print(f"synchronise_watches()  failed to synchronise internal clocks to GPS time: {e} - {repr(e)}")
         await asyncio.sleep(0.5)
-        return _call_time
+        # return _last_sync_time
     # return the last successful refresh time
     _lastRefresh = TimeCruncher.now_rtc_to_epoch(rtc.datetime())
     return _lastRefresh
@@ -647,7 +649,7 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
         if ((now - lastSynchroniseWatches) >= INTERVAL_SYNC_WATCHES):
             print(f"refresh_scheduler()  Loop Calls  synchronise_watches() [SW:{(now - lastSynchroniseWatches):04}]")
-            sync = asyncio.create_task(synchronise_watches(now, (now - lastSynchroniseWatches)))
+            sync = asyncio.create_task(synchronise_watches(now, lastSynchroniseWatches))
             lastSynchroniseWatches = await sync
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
         if ((now - lastLedRefresh) >= INTERVAL_LED_REFRESH) or (new_bulletin == True):
