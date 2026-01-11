@@ -50,14 +50,14 @@ EVENING_CUTOFF = 18
 MORNING_CUTOFF = 2
 BOM_MINIMUM_POLL_INTERVAL = 120 * 60
 WATCH_SYNC_ADJUST_MAX_PERCENT = 0.05
-WATCH_SYNC_CONSECUTIVE_VALIDS = 3
-INTERVAL_SCHEDULER_TASK = 6
-INTERVAL_SCHEDULER_SLEEP = 95
+WATCH_SYNC_CONSECUTIVE_VALIDS = 2
+INTERVAL_SCHEDULER_TASK = 1                                                                 ##### TESTING ONLY: DEFAULT 6
+INTERVAL_SCHEDULER_SLEEP = 6                                                               ##### TESTING ONLY: DEFAULT 95
 INTERVAL_FORECAST_DATA = 23 * 60 * 60
 INTERVAL_BULLETIN_AGE = 14 * 60 * 60
 INTERVAL_FORECAST_SYNC = 30 * 60
 INTERVAL_OLED_REFRESH = 30 * 60
-INTERVAL_SYNC_WATCHES = 1 * 60 ##### TESTING ONLY: DEFAULT 12 MINS
+INTERVAL_SYNC_WATCHES = 0.4 * 60                                                            ##### TESTING ONLY: DEFAULT 12
 INTERVAL_LED_REFRESH = 15 * 60
 
 ## HARDWARE
@@ -270,33 +270,37 @@ async def system_setup():
     return _geohash, _timezoneOffset
 
 async def synchronise_watches(_call_time, _last_sync_time):
-    # see system_setup()
     try:
-        attempts = 0
+        conseq_valids = 0
         prev_time = None
+        attempts = 0
         while True:
             GPS_obj.get_data()
             await asyncio.sleep(1)
             returned_values = GPS_obj.current_data.year, GPS_obj.current_data.month, GPS_obj.current_data.day, GPS_obj.current_data.hour, GPS_obj.current_data.minute, GPS_obj.current_data.second
+            print(f"synchronise_watches()  GPS data raw returned_values:{returned_values}")
             if any(v in (0, None) for v in returned_values):
                 conseq_valids = 0
                 prev_time = None
-                attemps += 1
+                attempts += 1
+                print(f"synchronise_watches()  GPS data raw returned_values = CONTAINS ZEROES")
             elif not prev_time == None:
                 new_time = (GPS_obj.current_data.minute * 60) + (GPS_obj.current_data.second)
                 delta = new_time - prev_time
                 if not (0 <= delta <= 3):
                     conseq_valids = 0
                     prev_time = None
-                    attemps += 1
+                    attempts += 1
+                    print(f"synchronise_watches()  GPS data raw returned_values = WENT BACKWARDS")
                 else:
                     conseq_valids += 1
-                    attemps += 1
+                    attempts += 1
                     prev_time = new_time
+                    print(f"synchronise_watches()  GPS data raw returned_values = VALID")
             if conseq_valids >= WATCH_SYNC_CONSECUTIVE_VALIDS:
                 break
-            elif attemps >= (WATCH_SYNC_CONSECUTIVE_VALIDS * 4):
-                print(f"synchronise_watches()  received < {WATCH_SYNC_CONSECUTIVE_VALIDS} consecutive valid data sets in the sampled {(WATCH_SYNC_CONSECUTIVE_VALIDS * 4)}")
+            elif attempts >= (WATCH_SYNC_CONSECUTIVE_VALIDS * 4):
+                print(f"synchronise_watches()  received <{WATCH_SYNC_CONSECUTIVE_VALIDS} consecutive valid data sets in the sampled {(WATCH_SYNC_CONSECUTIVE_VALIDS * 4)}. CLOCK NOT UPDATED")
                 return _call_time
         await asyncio.sleep(0.2)
         # calculate day_of_week, required to set the Pico internal clock (UTC)
@@ -311,8 +315,9 @@ async def synchronise_watches(_call_time, _last_sync_time):
         await asyncio.sleep(0.2)
         # calculate what the difference is, guard against huge jumps
         clock_diff = clock_new - clock_current
-        if abs(clock_diff) > (_last_sync_time * WATCH_SYNC_ADJUST_MAX_PERCENT):
-            print(f"synchronise_watches()  received GPS data greater than the maximum adjustment variance: [{int(abs(clock_diff)/(_last_sync_time * WATCH_SYNC_ADJUST_MAX_PERCENT)):02}%]")
+        clock_adj_thresh = min(0, _last_sync_time * WATCH_SYNC_ADJUST_MAX_PERCENT)
+        if abs(clock_diff) > (clock_adj_thresh):
+            print(f"synchronise_watches()  received GPS data greater than the maximum adjustment variance: [{abs(clock_diff)}/{clock_adj_thresh}]. CLOCK NOT UPDATED")
             return _call_time
         # display the adjustment to be made
         thenY, thenM, thenD, _, thenHr, thenMn, thenSc, _ = rtc.datetime()
@@ -327,7 +332,7 @@ async def synchronise_watches(_call_time, _last_sync_time):
     except Exception as e:
         print(f"synchronise_watches()  failed to synchronise internal clocks to GPS time: {e} - {repr(e)}")
         await asyncio.sleep(0.5)
-        return False
+        return _call_time
     # return the last successful refresh time
     _lastRefresh = TimeCruncher.now_rtc_to_epoch(rtc.datetime())
     return _lastRefresh
@@ -612,18 +617,18 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
         now = TimeCruncher.now_rtc_to_epoch(rtc.datetime())
         y, m, d, _, hh, mm, ss, _ = rtc.datetime()
         await asyncio.sleep(0.5)
-        #print(f"refresh_scheduler()  Loop Start  [{y:04}-{m:02}-{d:02} {hh:02}.{mm:02}.{ss:02}][CPU:{(calc_cpu_temp()):02.2f}°C][RAM:{(calc_ram_usage()):02}%][FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}][FS:{(now - lastForecastSync):04}][NB:{new_bulletin:>1}][FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}][LOR:{(now - lastOledRefresh):04}][SW:{(now - lastSynchroniseWatches):04}][LLR:{(now - lastLedRefresh):04}]")
-        print(f"refresh_scheduler()  Loop Start  [CPU:{(calc_cpu_temp()):02.1f}°C][RAM:{(calc_ram_usage()):03}%][FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}][FS:{(now - lastForecastSync):04}][NB:{new_bulletin:>1}][FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}][LOR:{(now - lastOledRefresh):04}][SW:{(now - lastSynchroniseWatches):04}][LLR:{(now - lastLedRefresh):04}]")
+        #print(f"refresh_scheduler()  Loop Start  [{y:04}-{m:02}-{d:02} {hh:02}.{mm:02}.{ss:02}] [CPU:{(calc_cpu_temp()):02.2f}°C][RAM:{(calc_ram_usage()):02}%] [FDR:{(now - lastForecastDataRefresh):05}][BNW:{(now - _updateMetadata["bulletin_time"]):05}][BNX:{(now - _updateMetadata["bulletin_next"]):05}][FSD:{(now - lastForecastSync):04}][SW:{(now - lastSynchroniseWatches):04}][LOR:{(now - lastOledRefresh):04}][LLR:{(now - lastLedRefresh):04}][FND:{_forecastToday["dd"]:02}/{d:02}]")
+        print(f"refresh_scheduler()  Loop Start  [CPU:{(calc_cpu_temp()):02.1f}°C][RAM:{(calc_ram_usage()):03}%] [FDR:{(now - lastForecastDataRefresh):05}][BNW:{(now - _updateMetadata["bulletin_time"]):05}][BNX:{(now - _updateMetadata["bulletin_next"]):05}][FSD:{(now - lastForecastSync):04}][SW:{(now - lastSynchroniseWatches):04}][LOR:{(now - lastOledRefresh):04}][LLR:{(now - lastLedRefresh):04}][FND:{_forecastToday["dd"]:02}/{d:02}]")
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
         if ((now - lastForecastDataRefresh) >= INTERVAL_FORECAST_DATA) or ((now - _updateMetadata["bulletin_time"]) >= INTERVAL_BULLETIN_AGE) or (now >= _updateMetadata["bulletin_next"]):
-            print(f"refresh_scheduler()  Loop Calls  get_forecast_data()   [FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}]")
+            print(f"refresh_scheduler()  Loop Calls  get_forecast_data()   [FDR:{(now - lastForecastDataRefresh):05}][BNW:{(now - _updateMetadata["bulletin_time"]):05}][BNX:{(now >= _updateMetadata["bulletin_next"]):>1}]")
             forecast = asyncio.create_task(get_forecast_data(_geohash))
             lastForecastDataRefresh = now
             lastForecastDataRefresh, _forecastMeta, _forecastData = await forecast
             new_bulletin = True
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
         if ((now - lastForecastSync) >= INTERVAL_FORECAST_SYNC) or (new_bulletin == True):
-            print(f"refresh_scheduler()  Loop Calls  update_forecast() [FS:{(now - lastForecastSync):04}][NB:{new_bulletin}]")
+            print(f"refresh_scheduler()  Loop Calls  update_forecast() [FSD:{(now - lastForecastSync):04}][NWB:{new_bulletin}]")
             forecastSync = asyncio.create_task(update_forecast(_forecastMeta, _forecastData, _timezoneOffset))
             lastForecastSync = now
             lastForecastSync, _updateMetadata, _forecastToday, _forecastTomorrow = await forecastSync
@@ -635,31 +640,31 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
             new_bulletin = True
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
         if ((now - lastOledRefresh) >= INTERVAL_OLED_REFRESH) or (new_bulletin == True):
-            print(f"refresh_scheduler()  Loop Calls  pdate_display_oleds()    [LOR:{(now - lastOledRefresh):04}][NB:{new_bulletin}]")
+            print(f"refresh_scheduler()  Loop Calls  pdate_display_oleds()    [LOR:{(now - lastOledRefresh):04}][NWB:{new_bulletin}]")
             oleds = asyncio.create_task(update_display_oleds(_forecastToday, _forecastTomorrow, _locCity))
             lastOledRefresh = now
             lastOledRefresh = await oleds
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
         if ((now - lastSynchroniseWatches) >= INTERVAL_SYNC_WATCHES):
             print(f"refresh_scheduler()  Loop Calls  synchronise_watches() [SW:{(now - lastSynchroniseWatches):04}]")
-            sync = asyncio.create_task(synchronise_watches(now, lastSynchroniseWatches))
+            sync = asyncio.create_task(synchronise_watches(now, (now - lastSynchroniseWatches)))
             lastSynchroniseWatches = await sync
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
         if ((now - lastLedRefresh) >= INTERVAL_LED_REFRESH) or (new_bulletin == True):
-            print(f"refresh_scheduler()  Loop Calls  update_display_temps()    [LLR:{(now - lastLedRefresh):04}][NB:{new_bulletin}]")
+            print(f"refresh_scheduler()  Loop Calls  update_display_temps()    [LLR:{(now - lastLedRefresh):04}][NWB:{new_bulletin}]")
             temps = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
             lastLedRefresh = now
             lastLedRefresh = await temps
         if (hh == EVENING_CUTOFF) and ((mm == 0) or (mm == 1) or (mm == 2)):
-            print(f"refresh_scheduler()  Loop Calls  update_display_temps()    [EVE:hh{(hh):02}mm{(mm):02}]")
+            print(f"refresh_scheduler()  Loop Calls  update_display_temps()    [EVC:{(hh):02}hh{(mm):02}mm]")
             temps = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
             lastLedRefresh = now
             lastLedRefresh = await temps
         new_bulletin = False
         #y, m, d, _, hh, mm, ss, _ = rtc.datetime()
         now = TimeCruncher.now_rtc_to_epoch(rtc.datetime())
-        #print(f"refresh_scheduler()  Loop End    [{y:04}-{m:02}-{d:02} {hh:02}.{mm:02}.{ss:02}][CPU:{(cpu_temperature):02.2f}°C][RAM:{(calc_ram_usage()):02}%][FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}][FS:{(now - lastForecastSync):04}][NB:{new_bulletin:>1}][FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}][LOR:{(now - lastOledRefresh):04}][SW:{(now - lastSynchroniseWatches):04}][LLR:{(now - lastLedRefresh):04}]")
-        print(f"refresh_scheduler()  Loop End    [CPU:{(calc_cpu_temp()):02.1f}°C][RAM:{(calc_ram_usage()):03}%][FDR:{(now - lastForecastDataRefresh):05}][BT:{(now - _updateMetadata["bulletin_time"]):05}][BN:{(now >= _updateMetadata["bulletin_next"]):>1}][FS:{(now - lastForecastSync):04}][NB:{new_bulletin:>1}][FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}][LOR:{(now - lastOledRefresh):04}][SW:{(now - lastSynchroniseWatches):04}][LLR:{(now - lastLedRefresh):04}]")
+        #print(f"refresh_scheduler()  Loop Start  [{y:04}-{m:02}-{d:02} {hh:02}.{mm:02}.{ss:02}] [CPU:{(calc_cpu_temp()):02.2f}°C][RAM:{(calc_ram_usage()):02}%] [FDR:{(now - lastForecastDataRefresh):05}][BNW:{(now - _updateMetadata["bulletin_time"]):05}][BNX:{(now - _updateMetadata["bulletin_next"]):05}][FSD:{(now - lastForecastSync):04}][SW:{(now - lastSynchroniseWatches):04}][LOR:{(now - lastOledRefresh):04}][LLR:{(now - lastLedRefresh):04}][FND:{_forecastToday["dd"]:02}/{d:02}]")
+        print(f"refresh_scheduler()  Loop End    [CPU:{(calc_cpu_temp()):02.1f}°C][RAM:{(calc_ram_usage()):03}%] [FDR:{(now - lastForecastDataRefresh):05}][BNW:{(now - _updateMetadata["bulletin_time"]):05}][BNX:{(now - _updateMetadata["bulletin_next"]):05}][FSD:{(now - lastForecastSync):04}][SW:{(now - lastSynchroniseWatches):04}][LOR:{(now - lastOledRefresh):04}][LLR:{(now - lastLedRefresh):04}][FND:{_forecastToday["dd"]:02}/{d:02}]")
         logger.flush()
         gc.collect()
         await asyncio.sleep(INTERVAL_SCHEDULER_SLEEP)        
