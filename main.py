@@ -269,7 +269,7 @@ async def system_setup():
     await asyncio.sleep(0.5)
     return _geohash, _timezoneOffset
 
-async def synchronise_watches(_call_time, _last_sync_time):
+async def synchronise_watches(_last_sync_time, _call_time):
     try:
         conseq_valids = 0
         prev_time = None
@@ -335,7 +335,7 @@ async def synchronise_watches(_call_time, _last_sync_time):
     except Exception as e:
         print(f"synchronise_watches()  failed to synchronise internal clocks to GPS time: {e} - {repr(e)}")
         await asyncio.sleep(0.5)
-        # return _last_sync_time
+        return _last_sync_time
     # return the last successful refresh time
     _lastRefresh = TimeCruncher.now_rtc_to_epoch(rtc.datetime())
     return _lastRefresh
@@ -360,7 +360,7 @@ async def get_location(_geohash):
     print(f"get_location()  {_locCity}, {_locState}, Australia")
     return _locCity, _locState
 
-async def get_forecast_data(_geohash):
+async def get_forecast_data(_last_sync_time, _geohash):
     try:
         await asyncio.sleep(0.5)
         # attempt to connect to the BoM and return the daily forecast data for the given geohash
@@ -369,11 +369,11 @@ async def get_forecast_data(_geohash):
     except Exception as e:
         print(f"get_forecast_data() failed to retrieve new data from the BoM: {e} - {repr(e)}")
         await asyncio.sleep(0.5)
-        return False
+        return _last_sync_time, 0, 0
     _lastRefresh  = TimeCruncher.now_rtc_to_epoch(rtc.datetime())
     return _lastRefresh, _forecastMeta, _forecastData
 
-async def update_forecast(_forecastMeta, _forecastData, _timezoneOffset):
+async def update_forecast(_last_sync_time, _forecastMeta, _forecastData, _timezoneOffset):
     now = TimeCruncher.now_rtc_to_epoch(rtc.datetime())
     bulletin_time = ((TimeCruncher.parse_8601datetime(_forecastMeta.fc_issue_time)) + _timezoneOffset)
     ## wait at least 90 minutes before going back to the BoM
@@ -399,11 +399,11 @@ async def update_forecast(_forecastMeta, _forecastData, _timezoneOffset):
     except Exception as e:
         print(f"update_forecast() failed to sync the BoM forecast data to the current date: {e} - {repr(e)}")
         await asyncio.sleep(0.5)
-        return False
+        return _last_sync_time, 0, 0, 0
     # if i is still not set by this point, there is a date mismatch between the current system date and the data from the BoM
     if i == None:
         print(f"update_forecast() has forecast data for {TimeCruncher.parse_8601localtime(_forecastData[0].fc_date, _timezoneOffset)}, but isn't today {rtc.datetime()}?")
-        return False
+        return _last_sync_time, 0, 0, 0
     await asyncio.sleep(0.5)
     # attempt to collect the correct data into return dictionary
     try:
@@ -440,7 +440,7 @@ async def update_forecast(_forecastMeta, _forecastData, _timezoneOffset):
     except Exception as e:
         print(f"update_forecast() failed to organise the BoM data into the correct structure: {e} - {repr(e)}")
         await asyncio.sleep(0.5)
-        return False
+        return _last_sync_time, 0, 0, 0
     await asyncio.sleep(0.5)
     # print some forecast data
     print(f"update_forecast()  BoM Today {_forecastToday['yy']:04}-{_forecastToday['mm']:02}-{_forecastToday['dd']:02} Max: {_forecastToday['max']}°C Min: {_forecastToday['min']}°C Rain: {_forecastToday['rain']}% ({_forecastToday['text']})")
@@ -449,7 +449,7 @@ async def update_forecast(_forecastMeta, _forecastData, _timezoneOffset):
     _lastRefresh = TimeCruncher.now_rtc_to_epoch(rtc.datetime())
     return _lastRefresh, _updateMetadata, _forecastToday, _forecastTomorrow
 
-async def update_display_temps(_todayMax, _overnighLow, _tomorrowMax):
+async def update_display_temps(_last_sync_time, _todayMax, _overnighLow, _tomorrowMax):
     _, _, _, _, hh, _, _, _ =  rtc.datetime()
     await asyncio.sleep(0.5)
     try:
@@ -466,13 +466,13 @@ async def update_display_temps(_todayMax, _overnighLow, _tomorrowMax):
     except Exception as e:
         print(f"update_display_temps() failed write the temps on the displays: {e} - {repr(e)}")
         await asyncio.sleep(0.5)
-        return False
+        return _last_sync_time
     # return the last successful refresh time
     await asyncio.sleep(0.5)
     _lastRefresh = TimeCruncher.now_rtc_to_epoch(rtc.datetime())
     return _lastRefresh
 
-async def update_display_oleds(_forecastToday, _forecastTomorrow, _locCity):
+async def update_display_oleds(_last_sync_time, _forecastToday, _forecastTomorrow, _locCity):
     # lookup the day of the week
     tdDoW = TimeCruncher.get_weekday(_forecastToday['yy'],_forecastToday['mm'],_forecastToday['dd'])
     tdStrDoW = DAYS_OF_WEEK[tdDoW % 7]
@@ -559,7 +559,7 @@ async def update_display_oleds(_forecastToday, _forecastTomorrow, _locCity):
     except Exception as e:
         print(f"update_display_oleds() failed write the canvas to the OLEDs: {e} - {repr(e)}")
         await asyncio.sleep(0.5)
-        return False
+        return _last_sync_time
     # return the last successful refresh time
     await asyncio.sleep(0.5)
     _lastRefresh = TimeCruncher.now_rtc_to_epoch(rtc.datetime())
@@ -625,43 +625,51 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
         if ((now - lastForecastDataRefresh) >= INTERVAL_FORECAST_DATA) or ((now - _updateMetadata["bulletin_time"]) >= INTERVAL_BULLETIN_AGE) or (now >= _updateMetadata["bulletin_next"]):
             print(f"refresh_scheduler()  Loop Calls  get_forecast_data()   [FDR:{(now - lastForecastDataRefresh):05}][BNW:{(now - _updateMetadata["bulletin_time"]):05}][BNX:{(now >= _updateMetadata["bulletin_next"]):>1}]")
-            forecast = asyncio.create_task(get_forecast_data(_geohash))
-            lastForecastDataRefresh = now
-            lastForecastDataRefresh, _forecastMeta, _forecastData = await forecast
-            new_bulletin = True
+            forecast = asyncio.create_task(get_forecast_data(lastForecastDataRefresh, _geohash))
+            returned_time, _returnedMeta, _returnedData = await forecast
+            if not returned_time == lastForecastDataRefresh:
+                lastForecastDataRefresh = returned_time
+                _forecastMeta = _returnedMeta
+                _forecastData = _returnedData
+                new_bulletin = True
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
         if ((now - lastForecastSync) >= INTERVAL_FORECAST_SYNC) or (new_bulletin == True):
             print(f"refresh_scheduler()  Loop Calls  update_forecast() [FSD:{(now - lastForecastSync):04}][NWB:{new_bulletin}]")
-            forecastSync = asyncio.create_task(update_forecast(_forecastMeta, _forecastData, _timezoneOffset))
-            lastForecastSync = now
-            lastForecastSync, _updateMetadata, _forecastToday, _forecastTomorrow = await forecastSync
+            forecastSync = asyncio.create_task(update_forecast(lastForecastSync, _forecastMeta, _forecastData, _timezoneOffset))
+            returned_time, _returnedMetadata, _returnedToday, _returnedTomorrow = await forecastSync
+            if not returned_time == lastForecastSync:
+                lastForecastSync = returned_time
+                _updateMetadata = _returnedMetadata
+                _forecastToday = _returnedToday
+                _forecastTomorrow = _returnedTomorrow
         elif (_forecastToday["yy"] != y) or (_forecastToday["mm"] != m) or (_forecastToday["dd"] != d):
             print(f"refresh_scheduler()  Loop Calls  update_forecast() [FND:{_forecastToday["yy"]:04}{_forecastToday["mm"]:02}{_forecastToday["dd"]:02}/{y:04}{m:02}{d:02}]")
-            forecastSync = asyncio.create_task(update_forecast(_forecastMeta, _forecastData, _timezoneOffset))
-            lastForecastSync = now
-            lastForecastSync, _updateMetadata, _forecastToday, _forecastTomorrow = await forecastSync
-            new_bulletin = True
+            forecastSync = asyncio.create_task(update_forecast(lastForecastSync, _forecastMeta, _forecastData, _timezoneOffset))
+            returned_time, _returnedMetadata, _returnedToday, _returnedTomorrow = await forecastSync
+            if not returned_time == lastForecastSync:
+                new_bulletin = True
+                lastForecastSync = returned_time
+                _updateMetadata = _returnedMetadata
+                _forecastToday = _returnedToday
+                _forecastTomorrow = _returnedTomorrow
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
         if ((now - lastOledRefresh) >= INTERVAL_OLED_REFRESH) or (new_bulletin == True):
             print(f"refresh_scheduler()  Loop Calls  pdate_display_oleds()    [LOR:{(now - lastOledRefresh):04}][NWB:{new_bulletin}]")
-            oleds = asyncio.create_task(update_display_oleds(_forecastToday, _forecastTomorrow, _locCity))
-            lastOledRefresh = now
+            oleds = asyncio.create_task(update_display_oleds(lastOledRefresh, _forecastToday, _forecastTomorrow, _locCity))
             lastOledRefresh = await oleds
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
         if ((now - lastSynchroniseWatches) >= INTERVAL_SYNC_WATCHES):
             print(f"refresh_scheduler()  Loop Calls  synchronise_watches() [SW:{(now - lastSynchroniseWatches):04}]")
-            sync = asyncio.create_task(synchronise_watches(now, lastSynchroniseWatches))
+            sync = asyncio.create_task(synchronise_watches(lastSynchroniseWatches, now))
             lastSynchroniseWatches = await sync
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
         if ((now - lastLedRefresh) >= INTERVAL_LED_REFRESH) or (new_bulletin == True):
             print(f"refresh_scheduler()  Loop Calls  update_display_temps()    [LLR:{(now - lastLedRefresh):04}][NWB:{new_bulletin}]")
-            temps = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
-            lastLedRefresh = now
+            temps = asyncio.create_task(update_display_temps(lastLedRefresh, _forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
             lastLedRefresh = await temps
-        if (hh == EVENING_CUTOFF) and ((mm == 0) or (mm == 1) or (mm == 2)):
+        elif (hh == EVENING_CUTOFF) and ((mm == 0) or (mm == 1) or (mm == 2)):
             print(f"refresh_scheduler()  Loop Calls  update_display_temps()    [EVC:{(hh):02}hh{(mm):02}mm]")
-            temps = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
-            lastLedRefresh = now
+            temps = asyncio.create_task(update_display_temps(lastLedRefresh, _forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
             lastLedRefresh = await temps
         new_bulletin = False
         #y, m, d, _, hh, mm, ss, _ = rtc.datetime()
