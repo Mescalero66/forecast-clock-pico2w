@@ -63,6 +63,7 @@ INTERVAL_LED_REFRESH = 15 * 60                                                  
 ## HARDWARE
 cpu_temp = machine.ADC(4)
 wlan = WLAN()                                                                               # create WLAN object
+wlan.disconnectWiFi()
 rtc = RTC()                                                                                 # create Real Time Clock (local)
 uart = UART(0, baudrate=9600, tx=Pin(PIN_UART_TX), rx=Pin(PIN_UART_RX))                     # Set up UART connection to GPS module
 i2c = I2C(0, scl=Pin(PIN_LED8_SCL), sda=Pin(PIN_LED8_SDA))                                  # Set up I2C connection
@@ -218,7 +219,12 @@ async def enable_Wifi():
     if wlan.checkWiFi() == True:
         pass
     else:
-        wlan.connectWiFi(retries=3, wait_per_try=5)
+        try:
+            wlan.connectWiFi(retries=3, wait_per_try=5)
+        except Exception as e:
+            print(f"enable_Wifi()  failed to connect to Wifi after 3 attempts: {e} - {repr(e)}")
+            await asyncio.sleep(0.5)
+            machine.reset()
     return wlan.checkWiFi()
 
 async def system_setup():
@@ -369,7 +375,7 @@ async def get_forecast_data(_last_sync_time, _geohash):
     except Exception as e:
         print(f"get_forecast_data() failed to retrieve new data from the BoM: {e} - {repr(e)}")
         await asyncio.sleep(0.5)
-        return _last_sync_time, 0, 0
+        return _last_sync_time, None, None
     _lastRefresh  = TimeCruncher.now_rtc_to_epoch(rtc.datetime())
     return _lastRefresh, _forecastMeta, _forecastData
 
@@ -593,21 +599,21 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
     # get the initial set of forecast data
     await asyncio.sleep(0.5)
     print("refresh_scheduler()  calls get_forecast_data()")
-    firstForecastData = asyncio.create_task(get_forecast_data(_geohash))
+    firstForecastData = asyncio.create_task(get_forecast_data(0, _geohash))
     lastForecastDataRefresh, _forecastMeta, _forecastData = await firstForecastData
     await asyncio.sleep(0.5)
     # match the data to the current date
     print("refresh_scheduler()  calls update_forecast()")
-    firstForecastSync = asyncio.create_task(update_forecast(_forecastMeta, _forecastData, _timezoneOffset))
+    firstForecastSync = asyncio.create_task(update_forecast(0, _forecastMeta, _forecastData, _timezoneOffset))
     lastForecastSync, _updateMetadata, _forecastToday, _forecastTomorrow = await firstForecastSync
     await asyncio.sleep(0.5)
     # update the display_temps and the display_oleds (almost) immediately
     print("refresh_scheduler()  calls update_display_temps()")
-    firstLedRefresh = asyncio.create_task(update_display_temps(_forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
+    firstLedRefresh = asyncio.create_task(update_display_temps(0, _forecastToday['max'], _forecastToday['onlow'], _forecastTomorrow['max']))
     lastLedRefresh = await firstLedRefresh
     await asyncio.sleep(0.5)
     print("refresh_scheduler()  calls update_display_oleds()")
-    firstOledRefresh = asyncio.create_task(update_display_oleds(_forecastToday, _forecastTomorrow, _locCity))
+    firstOledRefresh = asyncio.create_task(update_display_oleds(0, _forecastToday, _forecastTomorrow, _locCity))
     lastOledRefresh = await firstOledRefresh
     await asyncio.sleep(0.5)
     # schedule the first wathc sync
@@ -706,7 +712,7 @@ startupClock = asyncio.create_task(update_display_clock())
 disp4H.show_string("GEt")
 disp4L.show_string("&IFI")
 print("main.py calls enable_Wifi()")
-asyncio.run(enable_Wifi())
+_ = asyncio.run(enable_Wifi())
 time.sleep(1)
 while wlan.checkWiFi() == False:
     print("checkWiFi() Attempting to connect to WiFi")
