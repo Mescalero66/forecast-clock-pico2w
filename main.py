@@ -59,7 +59,7 @@ INTERVAL_FORECAST_DATA = 23 * 60 * 60                                           
 INTERVAL_BULLETIN_AGE = 13 * 60 * 60                                                        ##### DEFAULT 13 HOURS
 INTERVAL_FORECAST_SYNC = 60 * 60                                                            ##### DEFAULT 60 MINUTES
 INTERVAL_OLED_REFRESH = 30 * 60                                                             ##### DEFAULT 30 MINUTES
-INTERVAL_SYNC_WATCHES = 12 * 60                                                             ##### DEFAULT 12 MINUTES
+INTERVAL_SYNC_WATCHES = 24 * 60                                                             ##### DEFAULT 24 MINUTES
 INTERVAL_LED_REFRESH = 15 * 60                                                              ##### DEFAULT 15 MINUTES
 
 ## HARDWARE
@@ -114,8 +114,9 @@ disp4L.display_on(0)                                            # TURN ON THE LO
 disp4L.show_string("__*C") 
 
 class PrintLogger:
-    def __init__(self, logfile, flush_interval=LOGGING_WRITE_INTERVAL_SECONDS):
+    def __init__(self, logfile, filename, flush_interval=LOGGING_WRITE_INTERVAL_SECONDS):
         self.logfile = logfile
+        self.filename = filename
         self.flush_interval = flush_interval
         self._buffer = []
         self._last_flush = time.ticks_ms()
@@ -138,11 +139,15 @@ class PrintLogger:
             self._last_flush = time.ticks_ms()
     
     def rotate_if_needed(self):
-        new_filename = create_log_file()
-        if self.logfile.name != new_filename:
+        try:
+            new_filename = create_log_file()
+        except:
+            return
+        if new_filename != self.filename:
             self.flush()
             self.logfile.close()
             self.logfile = open(new_filename, "a")
+            self.filename = new_filename
 
     def timestamp(self):
         lt = rtc.datetime()
@@ -706,7 +711,7 @@ else:
     filename = create_log_file()
     log = open(filename, "a")
     _original_print = builtins.print
-    logger = PrintLogger(log, flush_interval=LOGGING_WRITE_INTERVAL_SECONDS)
+    logger = PrintLogger(log, filename, flush_interval=LOGGING_WRITE_INTERVAL_SECONDS)
     def logged_print(*args, **kwargs):
         _original_print(*args, **kwargs)
         line = " ".join(str(a) for a in args)
