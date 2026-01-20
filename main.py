@@ -43,18 +43,20 @@ OLED_ID_BL = 0
 OLED_ID_BR = 1
 ## LOGGING
 ENABLE_LOGGING = 1
-_current_log_filename = None
+LOGGING_MAXIMUM_HOURS = 24
+LOGGING_WRITE_INTERVAL_SECONDS = 60
+_current_log_key = None
 _original_print = builtins.print
 ## PARAMETERS
 EVENING_CUTOFF = 18
 MORNING_CUTOFF = 2
-BOM_MINIMUM_POLL_INTERVAL = 120 * 60
 WATCH_SYNC_ADJUST_MAX_PERCENT = 0.05
 WATCH_SYNC_CONSECUTIVE_VALIDS = 3
 INTERVAL_SCHEDULER_TASK = 6                                                                 ##### DEFAULT 6 SECONDS
 INTERVAL_SCHEDULER_SLEEP = 95                                                               ##### DEFAULT 95 SECONDS
+INTERVAL_BOM_MINIMUM_POLL = 30 * 60                                                         ##### DEFAULT 30 MINUTES
 INTERVAL_FORECAST_DATA = 23 * 60 * 60                                                       ##### DEFAULT 23 HOURS
-INTERVAL_BULLETIN_AGE = 14 * 60 * 60                                                        ##### DEFAULT 14 HOURS
+INTERVAL_BULLETIN_AGE = 13 * 60 * 60                                                        ##### DEFAULT 13 HOURS
 INTERVAL_FORECAST_SYNC = 60 * 60                                                            ##### DEFAULT 60 MINUTES
 INTERVAL_OLED_REFRESH = 30 * 60                                                             ##### DEFAULT 30 MINUTES
 INTERVAL_SYNC_WATCHES = 12 * 60                                                             ##### DEFAULT 12 MINUTES
@@ -112,13 +114,14 @@ disp4L.display_on(0)                                            # TURN ON THE LO
 disp4L.show_string("__*C") 
 
 class PrintLogger:
-    def __init__(self, logfile, flush_interval=60):
+    def __init__(self, logfile, flush_interval=LOGGING_WRITE_INTERVAL_SECONDS):
         self.logfile = logfile
         self.flush_interval = flush_interval
         self._buffer = []
         self._last_flush = time.ticks_ms()
 
     def log_line(self, line):
+        self.rotate_if_needed()
         ts = self.timestamp()
         entry = ts + line + "\n"
         self._buffer.append(entry)
@@ -133,31 +136,38 @@ class PrintLogger:
             self.logfile.flush()
             self._buffer.clear()
             self._last_flush = time.ticks_ms()
+    
+    def rotate_if_needed(self):
+        new_filename = create_log_file()
+        if self.logfile.name != new_filename:
+            self.flush()
+            self.logfile.close()
+            self.logfile = open(new_filename, "a")
 
     def timestamp(self):
         lt = rtc.datetime()
         return "[{:04d}-{:02d}-{:02d} {:02d}.{:02d}.{:02d}] ".format(lt[0], lt[1], lt[2], lt[4], lt[5], lt[6])
 
-def create_daily_log_file():
-    global _current_log_filename
-    y, m, d = GPS_obj.current_data.year, GPS_obj.current_data.month, GPS_obj.current_data.day
-    filename = "logs/forecastclock_{:04d}{:02d}{:02d}.txt".format(y, m, d)
+def create_log_file():
+    global _current_log_key
+    y, m, d, h = GPS_obj.current_data.year, GPS_obj.current_data.month, GPS_obj.current_data.day, GPS_obj.current_data.hour
+    log_key = "{:04d}{:02d}{:02d}_{:02d}".format(y, m, d, h)
+    filename = "logs/forecastclock_{}.txt".format(log_key)
     if "logs" not in os.listdir():
         os.mkdir("logs")
-    if _current_log_filename != filename:
+    if _current_log_key != log_key:
         cleanup_old_logs()
-        _current_log_filename = filename
-    return _current_log_filename
+        _current_log_key = log_key
+    return filename
 
 def cleanup_old_logs():
     if "logs" not in os.listdir():
         return
-    files = [f for f in os.listdir("logs") if f.startswith("forecastclock_") and f.endswith(".txt")]
-    files.sort()
-    while len(files) > 2:
+    files = sorted(f for f in os.listdir("logs") if f.startswith("forecastclock_") and f.endswith(".txt"))
+    while len(files) > LOGGING_MAXIMUM_HOURS:
         oldest = files.pop(0)
         os.remove(f"logs/{oldest}")
-        print(f"Deleted old log: {oldest}")
+        print(f"cleanup_old_logs()  deleted the oldest log file: {oldest}")
 
 def calc_ram_usage():
     ram_used = int(((gc.mem_free()) / (gc.mem_free() + gc.mem_alloc())) * 100)
@@ -208,10 +218,10 @@ async def get_GPS_fix():
         GPS_obj.get_data()
         print(f"get_GPS_fix()  Listens for satellites: {GPS_obj.current_data.satellites:02}/{GPS_obj.current_data.has_fix:02}[{GPS_obj.message_buffer}]")
         asyncio.run(radar_GPS_animation(t))
-        NoS = f"GPS={abs(hash(GPS_obj.message_buffer)) % 10000:04d}"
+        NoS = f"GPS={abs((hash(GPS_obj.message_buffer)) * len(GPS_obj.message_buffer)) % 10000:04d}"
         disp8.set_string(NoS, "r")
         asyncio.run(radar_GPS_animation(t))
-        NoS = f"GPS={abs(hash(GPS_obj.message_buffer)) % 10000:04d}"
+        NoS = f"GPS={abs((hash(GPS_obj.message_buffer)) * len(GPS_obj.message_buffer)) % 10000:04d}"
         disp8.set_string(NoS, "r")
     return GPS_obj.has_fix
 
@@ -387,7 +397,7 @@ async def update_forecast(_last_sync_time, _forecastMeta, _forecastData, _timezo
     _updateMetadata = {
         "response_time": (TimeCruncher.parse_8601datetime(_forecastMeta.fc_response_timestamp)) + _timezoneOffset,
         "bulletin_time": bulletin_time,
-        "bulletin_next": max(bulletin_next, (bulletin_time + BOM_MINIMUM_POLL_INTERVAL))
+        "bulletin_next": max(bulletin_next, (bulletin_time + INTERVAL_BOM_MINIMUM_POLL))
     }
     print(f"update_forecast()  BoM [Resp: {now - _updateMetadata["response_time"]}][Bull: {now - _updateMetadata["bulletin_time"]}][Next: {now - _updateMetadata["bulletin_next"]}]")
     await asyncio.sleep(0.5)
@@ -629,7 +639,7 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
         #print(f"refresh_scheduler()  Loop Start  [{y:04}-{m:02}-{d:02} {hh:02}.{mm:02}.{ss:02}] [CPU:{(calc_cpu_temp()):02.2f}°C][RAM:{(calc_ram_usage()):02}%] [FDR:{(now - lastForecastDataRefresh):05}][BNW:{(now - _updateMetadata["bulletin_time"]):05}][BNX:{(now - _updateMetadata["bulletin_next"]):05}][FSD:{(now - lastForecastSync):04}][SW:{(now - lastSynchroniseWatches):04}][LOR:{(now - lastOledRefresh):04}][LLR:{(now - lastLedRefresh):04}][FND:{_forecastToday["dd"]:02}/{d:02}]")
         print(f"refresh_scheduler()  Loop Start  [CPU:{(calc_cpu_temp()):02.1f}°C][RAM:{(calc_ram_usage()):03}%] [FDR:{(now - lastForecastDataRefresh):05}][BNW:{(now - _updateMetadata["bulletin_time"]):05}][BNX:{(now - _updateMetadata["bulletin_next"]):05}][FSD:{(now - lastForecastSync):04}][SW:{(now - lastSynchroniseWatches):04}][LOR:{(now - lastOledRefresh):04}][LLR:{(now - lastLedRefresh):04}][FND:{_forecastToday["dd"]:02}/{d:02}]")
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
-        if ((now - lastForecastDataRefresh) >= INTERVAL_FORECAST_DATA) or ((now - _updateMetadata["bulletin_time"]) >= INTERVAL_BULLETIN_AGE) or (now >= _updateMetadata["bulletin_next"]):
+        if (((now - lastForecastDataRefresh) >= INTERVAL_FORECAST_DATA) or ((now - _updateMetadata["bulletin_time"]) >= INTERVAL_BULLETIN_AGE)) and (now >= _updateMetadata["bulletin_next"]):
             print(f"refresh_scheduler()  Loop Calls  get_forecast_data()   [FDR:{(now - lastForecastDataRefresh):05}][BNW:{(now - _updateMetadata["bulletin_time"]):05}][BNX:{(now >= _updateMetadata["bulletin_next"]):>1}]")
             forecast = asyncio.create_task(get_forecast_data(lastForecastDataRefresh, _geohash))
             returned_time, _returnedMeta, _returnedData = await forecast
@@ -660,7 +670,7 @@ async def refresh_scheduler(_geohash, _timezoneOffset, _locCity, _locState):
                 _forecastTomorrow = _returnedTomorrow
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
         if ((now - lastOledRefresh) >= INTERVAL_OLED_REFRESH) or (new_bulletin == True):
-            print(f"refresh_scheduler()  Loop Calls  pdate_display_oleds()    [LOR:{(now - lastOledRefresh):04}][NWB:{new_bulletin}]")
+            print(f"refresh_scheduler()  Loop Calls  update_display_oleds()    [LOR:{(now - lastOledRefresh):04}][NWB:{new_bulletin}]")
             oleds = asyncio.create_task(update_display_oleds(lastOledRefresh, _forecastToday, _forecastTomorrow, _locCity))
             lastOledRefresh = await oleds
         await asyncio.sleep(INTERVAL_SCHEDULER_TASK)
@@ -693,10 +703,10 @@ asyncio.run(get_GPS_fix())
 if ENABLE_LOGGING == 0:
     pass
 else:
-    filename = create_daily_log_file()
+    filename = create_log_file()
     log = open(filename, "a")
     _original_print = builtins.print
-    logger = PrintLogger(log, flush_interval=60)
+    logger = PrintLogger(log, flush_interval=LOGGING_WRITE_INTERVAL_SECONDS)
     def logged_print(*args, **kwargs):
         _original_print(*args, **kwargs)
         line = " ".join(str(a) for a in args)

@@ -36,6 +36,7 @@ class BoMLocation:
                 response = urequests.get(loc_url, timeout=5)
                 if not hasattr(response, "status_code"):
                     print(f"Invalid response for {geoHash}")
+                    response.close()
                     return None
                 if response.status_code == 200:
                     json_data = response.json()
@@ -53,9 +54,11 @@ class BoMLocation:
                 else:
                     print(f"HTTP Error {response.status_code} for {geoHash}")
                     self.loc_valid_data = False
+                    response.close()
                     return None
             except Exception as e:
                 print(f"Attempt {attempt+1}: error resolving {geoHash} - {e} - {repr(e)}")
+                response.close()
         return self.loc_current_data
 
 class ForecastMetadata:
@@ -149,12 +152,11 @@ class BoMForecast:
                                 self.fc_metadata.fc_overnight_min = day.get("temp_later")
                     if i == 1 and self.fc_metadata.fc_overnight_min == None:
                         self.fc_metadata.fc_overnight_min = day["temp_min"]
-                
                 response.close()
                 self.fc_valid_data = True
                 return self.fc_metadata, self.fc_current_data
-                
         except Exception as e:
             print(f"Error resolving Forecast Data from geoHash [{geoHash}]: {e}")
             self.fc_valid_data = False
+            response.close()
             return self.fc_metadata, self.fc_current_data
